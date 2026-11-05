@@ -1,0 +1,11 @@
+{
+  "__version__": "1.0.0",
+  "wechatgame": {
+    "appid": "",
+    "orientation": "portrait",
+    "separateEngine": false,
+    "subpackages": [],
+    "wasmSubpackage": false,
+    "enableGamePadEvent": false
+  }
+}

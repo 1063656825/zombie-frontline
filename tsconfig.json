@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2015",
+    "module": "ES2015",
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "outDir": "./temp/declarations",
+    "declaration": true,
+    "declarationDir": "./temp/declarations",
+    "baseUrl": ".",
+    "paths": {
+      "db://*": ["./assets/*"]
+    }
+  },
+  "include": [
+    "assets/**/*",
+    "@types/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "library",
+    "local",
+    "temp",
+    "build",
+    "native"
+  ]
+}

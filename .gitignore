@@ -1,0 +1,33 @@
+# Cocos Creator generated files
+library/
+local/
+native/
+temp/
+build/
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor lock files
+*.ldb
+*.log
+
+# Build outputs
+*.apk
+*.ipa
+
+# Backup files
+*~
+*.bak
