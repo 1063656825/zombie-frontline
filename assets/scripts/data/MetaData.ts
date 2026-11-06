@@ -133,11 +133,12 @@ export interface IMetaSaveData {
     firepower: number;
     fort: number;
     supply: number;
+    unlockedLevels: string[];  // Day9: 已解锁关卡 ID
     version: number;
 }
 
-const SAVE_KEY = 'zombie_frontline_meta_v1';
-const CURRENT_VERSION = 1;
+const SAVE_KEY = 'zombie_frontline_meta_v2';
+const CURRENT_VERSION = 2;
 
 function createDefaultMeta(): IMetaSaveData {
     return {
@@ -145,6 +146,7 @@ function createDefaultMeta(): IMetaSaveData {
         firepower: 0,
         fort: 0,
         supply: 0,
+        unlockedLevels: ['L1'],  // L1 默认解锁
         version: CURRENT_VERSION
     };
 }
@@ -225,6 +227,7 @@ class MetaDataManager {
     get firepowerLevel(): number { return this._data.firepower; }
     get fortLevel(): number { return this._data.fort; }
     get supplyLevel(): number { return this._data.supply; }
+    get unlockedLevels(): string[] { return [...this._data.unlockedLevels]; }
     
     // ========== 写入 (原子操作) ==========
     
@@ -271,6 +274,35 @@ class MetaDataManager {
         }
     }
     
+    // ========== Day9: 关卡解锁 ==========
+    
+    /**
+     * 检查关卡是否解锁
+     */
+    isLevelUnlocked(levelId: string): boolean {
+        return this._data.unlockedLevels.includes(levelId);
+    }
+    
+    /**
+     * 解锁关卡
+     */
+    unlockLevel(levelId: string): boolean {
+        if (this._data.unlockedLevels.includes(levelId)) {
+            return false;  // 已解锁
+        }
+        this._data.unlockedLevels.push(levelId);
+        this.save();
+        console.log(`[MetaData] 解锁关卡: ${levelId}`);
+        return true;
+    }
+    
+    /**
+     * 获取所有已解锁关卡
+     */
+    getUnlockedLevels(): string[] {
+        return [...this._data.unlockedLevels];
+    }
+    
     // ========== 效果获取 ==========
     
     getFirepowerBonus(): number {
@@ -305,13 +337,31 @@ class MetaDataManager {
     
     private load(): IMetaSaveData {
         try {
-            const raw = this._storage.getItem(SAVE_KEY);
+            // 尝试新版 key
+            let raw = this._storage.getItem(SAVE_KEY);
             if (raw) {
                 const parsed = JSON.parse(raw) as IMetaSaveData;
                 if (parsed.version === CURRENT_VERSION) {
                     console.log('[MetaData] 读档成功:', parsed);
                     return parsed;
                 }
+            }
+            
+            // 尝试旧版 key 迁移
+            raw = this._storage.getItem('zombie_frontline_meta_v1');
+            if (raw) {
+                const oldData = JSON.parse(raw);
+                console.log('[MetaData] 迁移 v1 存档...');
+                const migrated: IMetaSaveData = {
+                    scrap: oldData.scrap || 0,
+                    firepower: oldData.firepower || 0,
+                    fort: oldData.fort || 0,
+                    supply: oldData.supply || 0,
+                    unlockedLevels: ['L1'],  // v1 只有 L1
+                    version: CURRENT_VERSION
+                };
+                this._storage.removeItem('zombie_frontline_meta_v1');
+                return migrated;
             }
         } catch (e) {
             console.error('[MetaData] 读档失败:', e);
@@ -346,6 +396,21 @@ class MetaDataManager {
         (this._data as any)[levelKey] = Math.min(Math.max(0, level), MAX_LEVEL);
         this.save();
         console.log(`[MetaData] DEBUG: ${line} = Lv.${level}`);
+    }
+    
+    /**
+     * 调试：解锁所有关卡
+     * 控制台: MetaData.debugUnlockAllLevels()
+     */
+    debugUnlockAllLevels(): void {
+        const allLevels = ['L1', 'L2'];
+        for (const levelId of allLevels) {
+            if (!this._data.unlockedLevels.includes(levelId)) {
+                this._data.unlockedLevels.push(levelId);
+            }
+        }
+        this.save();
+        console.log('[MetaData] DEBUG: 已解锁所有关卡', this._data.unlockedLevels);
     }
     
     toJSON(): IMetaSaveData {

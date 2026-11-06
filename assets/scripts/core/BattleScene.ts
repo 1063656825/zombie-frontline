@@ -19,6 +19,7 @@ import { TutorialGuide, TutorialType } from '../ui/TutorialGuide';
 import { SupplyButton } from '../ui/SupplyButton';
 import { BuildingType, BUILDING_NAMES } from '../battle/BuildingConfig';
 import { SCENE_LOBBY } from './SceneManager';
+import { screenShake, screenFlashRed } from '../effects/HitEffects';
 import { initWxBridge } from '../platform/WxBridge';
 
 const { ccclass, property } = _decorator;
@@ -599,6 +600,10 @@ export class BattleScene extends Component {
         if (this.combat) {
             this.combat.setActive(false);
         }
+        
+        // Day9: 失败视觉反馈
+        screenShake(this.node, 12, 0.35, 8);
+        screenFlashRed(this.node, 0.2);
         
         // 显示失败结算
         if (this._settlePanel && this.battleFlow) {

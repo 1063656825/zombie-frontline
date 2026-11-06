@@ -2,7 +2,27 @@
  * WaveConfig.ts
  * 波次配置数据
  * 定义每波的敌人组成、部署点发放、时长等
+ * Day9: 支持多关卡配置
  */
+
+/**
+ * 关卡 ID
+ */
+export enum LevelId {
+    L1 = 'L1',  // 首关（教学）
+    L2 = 'L2'   // 第二关（进阶）
+}
+
+/**
+ * 关卡配置
+ */
+export interface LevelConfig {
+    id: LevelId;
+    name: string;
+    description: string;
+    baseScrapReward: number;   // 基础残骸奖励
+    waves: WaveConfig[];
+}
 
 /**
  * 敌人类型枚举
@@ -54,7 +74,7 @@ function createWaveConfig(config: Omit<WaveConfig, 'getTotalEnemies'>): WaveConf
  * L1-Tutorial 首关波次配置表
  * 参考设计文档 §2
  */
-export const WAVE_CONFIGS: WaveConfig[] = [
+export const L1_WAVE_CONFIGS: WaveConfig[] = [
     // W0 教学波
     createWaveConfig({
         wave: 0,
@@ -138,6 +158,154 @@ export const WAVE_CONFIGS: WaveConfig[] = [
         ]
     })
 ];
+
+// 向后兼容
+export const WAVE_CONFIGS = L1_WAVE_CONFIGS;
+
+/**
+ * L2-进阶 第二关波次配置表
+ * Day9: 更难 - 更多 Z2/Z3、更紧凑部署、更少 DP
+ */
+export const L2_WAVE_CONFIGS: WaveConfig[] = [
+    // W0 开局波 - 比 L1 W0 更多敌人，已有快跑尸
+    createWaveConfig({
+        wave: 0,
+        deployFastTime: 6,
+        deployTuneTime: 3,  // 微调时间缩短
+        estimatedCombatTime: 30,
+        dpGrant: 2,         // DP 减少
+        enemies: [
+            { type: EnemyType.Z1_Walker, count: 8, interval: 2.5 },
+            { type: EnemyType.Z2_Runner, count: 2, delay: 12, interval: 3 }
+        ]
+    }),
+    
+    // W1 - 快跑尸增多
+    createWaveConfig({
+        wave: 1,
+        deployFastTime: 7,
+        deployTuneTime: 3,
+        estimatedCombatTime: 35,
+        dpGrant: 3,
+        enemies: [
+            { type: EnemyType.Z1_Walker, count: 10, interval: 2 },
+            { type: EnemyType.Z2_Runner, count: 5, delay: 8, interval: 2.5 }
+        ]
+    }),
+    
+    // W2 - 首次出现胖尸
+    createWaveConfig({
+        wave: 2,
+        deployFastTime: 7,
+        deployTuneTime: 3,
+        estimatedCombatTime: 45,
+        dpGrant: 3,
+        enemies: [
+            { type: EnemyType.Z1_Walker, count: 10, interval: 2.5 },
+            { type: EnemyType.Z2_Runner, count: 6, delay: 10, interval: 2 },
+            { type: EnemyType.Z3_Tank, count: 1, delay: 20, interval: 0 }
+        ]
+    }),
+    
+    // W3 - 压力升级
+    createWaveConfig({
+        wave: 3,
+        deployFastTime: 7,
+        deployTuneTime: 3,
+        estimatedCombatTime: 50,
+        dpGrant: 3,
+        enemies: [
+            { type: EnemyType.Z1_Walker, count: 12, interval: 2 },
+            { type: EnemyType.Z2_Runner, count: 8, delay: 10, interval: 1.8 },
+            { type: EnemyType.Z3_Tank, count: 2, delay: 25, interval: 8 }
+        ]
+    }),
+    
+    // W4 高潮波 - 大量混合
+    createWaveConfig({
+        wave: 4,
+        deployFastTime: 8,
+        deployTuneTime: 4,
+        estimatedCombatTime: 60,
+        dpGrant: 4,
+        enemies: [
+            { type: EnemyType.Z1_Walker, count: 15, interval: 1.8 },
+            { type: EnemyType.Z2_Runner, count: 10, delay: 8, interval: 1.5 },
+            { type: EnemyType.Z3_Tank, count: 3, delay: 20, interval: 8 }
+        ]
+    }),
+    
+    // W5 Boss 波 - 尸潮
+    createWaveConfig({
+        wave: 5,
+        deployFastTime: 10,
+        deployTuneTime: 4,
+        estimatedCombatTime: 80,
+        dpGrant: 4,
+        enemies: [
+            { type: EnemyType.Z1_Walker, count: 20, interval: 1.5 },
+            { type: EnemyType.Z2_Runner, count: 15, delay: 10, interval: 1.5 },
+            { type: EnemyType.Z3_Tank, count: 6, delay: 25, interval: 6 }
+        ]
+    })
+];
+
+/**
+ * 关卡配置表
+ */
+export const LEVEL_CONFIGS: Record<LevelId, LevelConfig> = {
+    [LevelId.L1]: {
+        id: LevelId.L1,
+        name: '首关',
+        description: '学习基础，熟悉操作',
+        baseScrapReward: 30,
+        waves: L1_WAVE_CONFIGS
+    },
+    [LevelId.L2]: {
+        id: LevelId.L2,
+        name: '进阶',
+        description: '尸潮汹涌，考验策略',
+        baseScrapReward: 45,
+        waves: L2_WAVE_CONFIGS
+    }
+};
+
+/**
+ * 获取关卡配置
+ */
+export function getLevelConfig(levelId: LevelId): LevelConfig {
+    return LEVEL_CONFIGS[levelId];
+}
+
+/**
+ * 获取关卡波次配置
+ */
+export function getLevelWaves(levelId: LevelId): WaveConfig[] {
+    return LEVEL_CONFIGS[levelId]?.waves || L1_WAVE_CONFIGS;
+}
+
+/**
+ * 获取关卡基础残骸奖励
+ */
+export function getLevelBaseScrap(levelId: LevelId): number {
+    return LEVEL_CONFIGS[levelId]?.baseScrapReward || 30;
+}
+
+/**
+ * 计算关卡总敌人数
+ */
+export function getLevelTotalEnemies(levelId: LevelId): number {
+    const waves = getLevelWaves(levelId);
+    return waves.reduce((sum, wave) => sum + wave.getTotalEnemies(), 0);
+}
+
+/**
+ * 计算关卡总 DP 发放
+ */
+export function getLevelTotalDpGrant(levelId: LevelId): number {
+    const waves = getLevelWaves(levelId);
+    return waves.reduce((sum, wave) => sum + wave.dpGrant, 0);
+}
 
 /**
  * 敌人属性配置

@@ -234,18 +234,20 @@ export class SettlePanel extends Component {
         }
         
         if (this.titleLabel) {
-            this.titleLabel.string = '💀 失败';
+            this.titleLabel.string = '💀 据点沦陷';
             this.titleLabel.color = new Color(255, 100, 100, 255);
         }
         
         if (this.waveLabel) {
-            this.waveLabel.string = `到达波次: ${waveReached + 1}/${totalWaves}`;
+            // Day9: 更清晰的失败文案
+            const progress = Math.floor(((waveReached + 1) / totalWaves) * 100);
+            this.waveLabel.string = `坚持到第 ${waveReached + 1} 波 (${progress}%)`;
         }
         
         if (this.scrapLabel) {
             // 失败也给 30% 残骸
             const loseScrap = Math.floor(scrapEarned * 0.3);
-            this.scrapLabel.string = `获得残骸: +${loseScrap}`;
+            this.scrapLabel.string = `抢救残骸: +${loseScrap}`;
             GameData.addScrap(loseScrap);
         }
         

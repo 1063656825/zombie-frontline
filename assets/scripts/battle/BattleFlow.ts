@@ -8,7 +8,7 @@
 
 import { _decorator, Component, Node, Label, EventTarget, director } from 'cc';
 import { GameData, GameEvents, EVENT_HP_CHANGED } from '../data/GameData';
-import { WaveConfig, WAVE_CONFIGS } from './WaveConfig';
+import { WaveConfig, WAVE_CONFIGS, LevelId, getLevelWaves, getLevelBaseScrap, getLevelConfig } from './WaveConfig';
 import { MetaData } from '../data/MetaData';
 import { AudioService, SfxId } from '../audio/AudioService';
 
@@ -65,6 +65,11 @@ export class BattleFlow extends Component {
     private _currentWave: number = 0;
     private _totalWaves: number = 6;  // W0-W5
     private _waveConfig: WaveConfig | null = null;
+    private _levelWaves: WaveConfig[] = WAVE_CONFIGS;  // Day9: 当前关卡波次
+    
+    // Day9: 当前关卡
+    private _currentLevelId: LevelId = LevelId.L1;
+    private _baseScrapReward: number = 30;
     
     // 战斗状态
     private _enemiesRemaining: number = 0;
@@ -98,6 +103,15 @@ export class BattleFlow extends Component {
     initBattle() {
         console.log('[BattleFlow] 初始化战斗');
         
+        // Day9: 加载当前关卡配置
+        this._currentLevelId = (GameData.currentLevel as LevelId) || LevelId.L1;
+        this._levelWaves = getLevelWaves(this._currentLevelId);
+        this._totalWaves = this._levelWaves.length;
+        this._baseScrapReward = getLevelBaseScrap(this._currentLevelId);
+        
+        const levelConfig = getLevelConfig(this._currentLevelId);
+        console.log(`[BattleFlow] 关卡: ${levelConfig.name} (${this._currentLevelId}), 波数: ${this._totalWaves}, 基础奖励: ${this._baseScrapReward}`);
+        
         // 重置游戏数据
         GameData.initBattle();
         
@@ -109,6 +123,11 @@ export class BattleFlow extends Component {
         
         this.updateUI();
     }
+    
+    /**
+     * Day9: 获取当前关卡 ID
+     */
+    get currentLevelId(): LevelId { return this._currentLevelId; }
     
     /**
      * 切换状态
@@ -131,8 +150,8 @@ export class BattleFlow extends Component {
      * 开始部署阶段
      */
     startDeployPhase() {
-        // 加载波次配置
-        this._waveConfig = WAVE_CONFIGS[this._currentWave] || WAVE_CONFIGS[0];
+        // Day9: 使用当前关卡波次配置
+        this._waveConfig = this._levelWaves[this._currentWave] || this._levelWaves[0];
         
         // 发放本波 DP
         if (this._waveConfig) {
@@ -240,9 +259,12 @@ export class BattleFlow extends Component {
     private onBattleWin() {
         console.log('[BattleFlow] 战斗胜利！');
         
-        // 发放基础残骸奖励
-        const baseScrap = 30;
-        GameData.addScrap(baseScrap);
+        // Day9: 发放关卡基础残骸奖励
+        GameData.addScrap(this._baseScrapReward);
+        console.log(`[BattleFlow] 基础残骸奖励: ${this._baseScrapReward}`);
+        
+        // Day9: 解锁下一关
+        this.unlockNextLevel();
         
         this.changeState(BattleState.Settle);
         
@@ -250,6 +272,24 @@ export class BattleFlow extends Component {
         AudioService.play(SfxId.Win);
         
         BattleEvents.emit(EVENT_BATTLE_WIN);
+    }
+    
+    /**
+     * Day9: 解锁下一关
+     */
+    private unlockNextLevel() {
+        const nextLevelMap: Record<LevelId, LevelId | null> = {
+            [LevelId.L1]: LevelId.L2,
+            [LevelId.L2]: null  // L2 是最后一关
+        };
+        
+        const nextLevel = nextLevelMap[this._currentLevelId];
+        if (nextLevel) {
+            const unlocked = MetaData.unlockLevel(nextLevel);
+            if (unlocked) {
+                console.log(`[BattleFlow] 解锁新关卡: ${nextLevel}`);
+            }
+        }
     }
     
     /**

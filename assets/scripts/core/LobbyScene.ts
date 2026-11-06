@@ -2,6 +2,7 @@
  * LobbyScene.ts
  * 大厅场景控制器
  * Day6: 三线升级 UI、持久化、开始战斗
+ * Day9: 关卡选择 UI
  */
 
 import { _decorator, Component, Label, director, Node, Graphics, Color, UITransform } from 'cc';
@@ -16,6 +17,7 @@ import {
     getSupplyEffectText
 } from '../data/MetaData';
 import { SCENE_BATTLE } from './SceneManager';
+import { LevelId, getLevelConfig, LEVEL_CONFIGS } from '../battle/WaveConfig';
 
 const { ccclass, property } = _decorator;
 
@@ -46,6 +48,10 @@ export class LobbyScene extends Component {
     private _fortRow: UpgradeRowUI | null = null;
     private _supplyRow: UpgradeRowUI | null = null;
     
+    // Day9: 关卡选择
+    private _selectedLevel: LevelId = LevelId.L1;
+    private _levelButtons: Map<LevelId, { button: Node; label: Label; lockIcon: Node }> = new Map();
+    
     // 首次提示是否已显示
     private _firstTipShown = false;
     
@@ -54,6 +60,9 @@ export class LobbyScene extends Component {
         
         // 创建升级 UI
         this.createUpgradeUI();
+        
+        // Day9: 创建关卡选择 UI
+        this.createLevelSelectUI();
         
         // 绑定按钮事件
         if (this.startBattleBtn) {
@@ -296,10 +305,154 @@ export class LobbyScene extends Component {
     }
     
     /**
+     * Day9: 创建关卡选择 UI
+     */
+    private createLevelSelectUI() {
+        const container = this.upgradeContainer || this.node;
+        
+        // 标题
+        const titleNode = new Node('LevelSelectTitle');
+        titleNode.parent = container;
+        titleNode.setPosition(0, 350, 0);
+        const titleLabel = titleNode.addComponent(Label);
+        titleLabel.string = '选择关卡';
+        titleLabel.fontSize = 28;
+        titleLabel.lineHeight = 34;
+        titleLabel.color = new Color(255, 255, 255, 255);
+        
+        // 关卡按钮容器
+        const btnContainer = new Node('LevelButtons');
+        btnContainer.parent = container;
+        btnContainer.setPosition(0, 290, 0);
+        
+        // L1 按钮
+        this.createLevelButton(btnContainer, LevelId.L1, -120, 0);
+        
+        // L2 按钮
+        this.createLevelButton(btnContainer, LevelId.L2, 120, 0);
+        
+        // 初始选中 L1
+        this._selectedLevel = LevelId.L1;
+        this.updateLevelButtons();
+    }
+    
+    /**
+     * 创建单个关卡按钮
+     */
+    private createLevelButton(parent: Node, levelId: LevelId, x: number, y: number) {
+        const config = getLevelConfig(levelId);
+        const isUnlocked = MetaData.isLevelUnlocked(levelId);
+        
+        const button = new Node(`LevelBtn_${levelId}`);
+        button.parent = parent;
+        button.setPosition(x, y, 0);
+        
+        const transform = button.addComponent(UITransform);
+        transform.setContentSize(180, 80);
+        
+        const graphics = button.addComponent(Graphics);
+        
+        // 关卡名称
+        const labelNode = new Node('Label');
+        labelNode.parent = button;
+        labelNode.setPosition(0, 10, 0);
+        const label = labelNode.addComponent(Label);
+        label.string = config.name;
+        label.fontSize = 22;
+        label.lineHeight = 28;
+        label.color = new Color(255, 255, 255, 255);
+        
+        // 描述
+        const descNode = new Node('Desc');
+        descNode.parent = button;
+        descNode.setPosition(0, -15, 0);
+        const descLabel = descNode.addComponent(Label);
+        descLabel.string = config.description;
+        descLabel.fontSize = 14;
+        descLabel.lineHeight = 18;
+        descLabel.color = new Color(180, 180, 180, 255);
+        
+        // 锁定图标
+        const lockNode = new Node('Lock');
+        lockNode.parent = button;
+        lockNode.setPosition(0, 0, 0);
+        const lockLabel = lockNode.addComponent(Label);
+        lockLabel.string = '🔒';
+        lockLabel.fontSize = 36;
+        lockLabel.color = new Color(100, 100, 100, 255);
+        lockNode.active = !isUnlocked;
+        
+        // 点击事件
+        button.on(Node.EventType.TOUCH_END, () => this.onLevelSelect(levelId), this);
+        
+        this._levelButtons.set(levelId, { button, label, lockIcon: lockNode });
+    }
+    
+    /**
+     * 关卡选择回调
+     */
+    private onLevelSelect(levelId: LevelId) {
+        const isUnlocked = MetaData.isLevelUnlocked(levelId);
+        
+        if (!isUnlocked) {
+            console.log(`[LobbyScene] 关卡 ${levelId} 未解锁`);
+            return;
+        }
+        
+        this._selectedLevel = levelId;
+        console.log(`[LobbyScene] 选中关卡: ${levelId}`);
+        this.updateLevelButtons();
+    }
+    
+    /**
+     * 更新关卡按钮状态
+     */
+    private updateLevelButtons() {
+        for (const [levelId, ui] of this._levelButtons) {
+            const isUnlocked = MetaData.isLevelUnlocked(levelId);
+            const isSelected = levelId === this._selectedLevel;
+            
+            const graphics = ui.button.getComponent(Graphics);
+            if (graphics) {
+                graphics.clear();
+                
+                if (!isUnlocked) {
+                    // 锁定
+                    graphics.fillColor = new Color(60, 60, 60, 200);
+                } else if (isSelected) {
+                    // 选中
+                    graphics.fillColor = new Color(50, 120, 180, 255);
+                } else {
+                    // 未选中
+                    graphics.fillColor = new Color(70, 80, 90, 230);
+                }
+                
+                graphics.roundRect(-90, -40, 180, 80, 10);
+                graphics.fill();
+                
+                // 边框
+                graphics.strokeColor = isSelected 
+                    ? new Color(100, 200, 255, 255)
+                    : new Color(100, 100, 100, 200);
+                graphics.lineWidth = isSelected ? 3 : 1;
+                graphics.roundRect(-90, -40, 180, 80, 10);
+                graphics.stroke();
+            }
+            
+            // 锁定图标
+            ui.lockIcon.active = !isUnlocked;
+        }
+    }
+    
+    /**
      * 开始战斗
      */
     private onStartBattle() {
+        // Day9: 设置当前关卡
+        GameData.currentLevel = this._selectedLevel;
+        
         console.log('[LobbyScene] 开始战斗');
+        console.log(`[LobbyScene] 选中关卡: ${this._selectedLevel}`);
         console.log(`[LobbyScene] 当前三线: 火力=${MetaData.firepowerLevel}, 城防=${MetaData.fortLevel}, 补给=${MetaData.supplyLevel}`);
         director.loadScene(SCENE_BATTLE);
     }

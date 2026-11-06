@@ -202,3 +202,90 @@ export function animateKnockback(
         .to(duration, { position: targetPos })
         .start();
 }
+
+/**
+ * Day9: 屏幕震动效果（失败时使用）
+ * @param node 要震动的节点（通常是场景根节点）
+ * @param intensity 震动强度（像素）
+ * @param duration 总时长
+ * @param frequency 震动频率（次数）
+ */
+export function screenShake(
+    node: Node,
+    intensity: number = 10,
+    duration: number = 0.3,
+    frequency: number = 6
+): Tween<Node> | null {
+    if (!node || !node.isValid) return null;
+    
+    const originalPos = node.position.clone();
+    const interval = duration / frequency;
+    
+    let tw = tween(node);
+    
+    for (let i = 0; i < frequency; i++) {
+        const offsetX = (Math.random() - 0.5) * 2 * intensity;
+        const offsetY = (Math.random() - 0.5) * 2 * intensity;
+        const decay = 1 - (i / frequency);  // 衰减
+        
+        tw = tw.to(interval / 2, { 
+            position: new Vec3(
+                originalPos.x + offsetX * decay,
+                originalPos.y + offsetY * decay,
+                originalPos.z
+            )
+        }).to(interval / 2, {
+            position: originalPos
+        });
+    }
+    
+    tw.call(() => {
+        if (node.isValid) {
+            node.setPosition(originalPos);
+        }
+    });
+    
+    return tw.start();
+}
+
+/**
+ * Day9: 红色全屏闪烁（失败提示）
+ * @param node 画布节点
+ * @param duration 闪烁时长
+ */
+export function screenFlashRed(
+    node: Node,
+    duration: number = 0.15
+): Tween<{ opacity: number }> | null {
+    if (!node || !node.isValid) return null;
+    
+    // 创建红色遮罩
+    const overlay = new Node('RedOverlay');
+    overlay.parent = node;
+    overlay.setPosition(0, 0, 100);  // 在最前面
+    
+    const graphics = overlay.addComponent(Graphics);
+    graphics.fillColor = new Color(255, 0, 0, 100);
+    graphics.rect(-400, -700, 800, 1400);  // 覆盖屏幕
+    graphics.fill();
+    
+    const proxy = { opacity: 100 };
+    
+    return tween(proxy)
+        .to(duration, { opacity: 0 }, {
+            onUpdate: (target) => {
+                if (overlay.isValid && graphics.isValid) {
+                    graphics.clear();
+                    graphics.fillColor = new Color(255, 0, 0, target.opacity);
+                    graphics.rect(-400, -700, 800, 1400);
+                    graphics.fill();
+                }
+            }
+        })
+        .call(() => {
+            if (overlay.isValid) {
+                overlay.destroy();
+            }
+        })
+        .start();
+}
