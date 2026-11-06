@@ -1,13 +1,16 @@
 /**
  * BattleScene.ts
  * 战斗场景控制器
- * 整合 BattleFlow、GridBuild 等系统
+ * 整合 BattleFlow、GridBuild、BuildingPanel 等系统
+ * Day2: 添加建筑面板与网格交互
  */
 
 import { _decorator, Component, Label, Node, director, Button, Color, Sprite, UITransform, Graphics } from 'cc';
 import { GameData, GameEvents, EVENT_HP_CHANGED, EVENT_DP_CHANGED } from '../data/GameData';
 import { BattleFlow, BattleState, BattleEvents, EVENT_STATE_CHANGED, EVENT_WAVE_CLEAR, EVENT_BATTLE_WIN, EVENT_BATTLE_LOSE } from '../battle/BattleFlow';
-import { GridBuild } from '../battle/GridBuild';
+import { GridBuild, GridEvents, EVENT_BUILDING_PLACED } from '../battle/GridBuild';
+import { BuildingPanel, BuildingPanelEvents, EVENT_BUILDING_SELECTED, EVENT_BUILDING_DESELECTED } from '../ui/BuildingPanel';
+import { BuildingType, BUILDING_NAMES } from '../battle/BuildingConfig';
 import { SCENE_LOBBY } from './SceneManager';
 
 const { ccclass, property } = _decorator;
@@ -20,6 +23,9 @@ export class BattleScene extends Component {
     
     @property(GridBuild)
     gridBuild: GridBuild | null = null;
+    
+    @property(BuildingPanel)
+    buildingPanel: BuildingPanel | null = null;
     
     @property(Node)
     startCombatBtn: Node | null = null;
@@ -43,19 +49,24 @@ export class BattleScene extends Component {
     @property(Node)
     enemyContainer: Node | null = null;  // 敌人容器
     
+    @property(Node)
+    gridNode: Node | null = null;  // 网格节点
+    
     start() {
         console.log('[BattleScene] 战斗场景开始');
         
         this.setupEventListeners();
         this.setupButtons();
         
-        // 初始化网格
+        // 初始化网格（传入建筑容器）
         if (this.gridBuild) {
-            this.gridBuild.initGrid();
+            this.gridBuild.initGrid(this.buildingContainer || undefined);
         }
         
         // 创建占位美术
         this.createPlaceholderGraphics();
+        
+        console.log('[BattleScene] Day2: 建筑面板与网格交互已启用');
     }
     
     onDestroy() {
@@ -63,15 +74,65 @@ export class BattleScene extends Component {
     }
     
     private setupEventListeners() {
+        // 战斗流程事件
         BattleEvents.on(EVENT_STATE_CHANGED, this.onBattleStateChanged, this);
         BattleEvents.on(EVENT_BATTLE_WIN, this.onBattleWin, this);
         BattleEvents.on(EVENT_BATTLE_LOSE, this.onBattleLose, this);
+        
+        // 建筑面板事件
+        BuildingPanelEvents.on(EVENT_BUILDING_SELECTED, this.onBuildingSelected, this);
+        BuildingPanelEvents.on(EVENT_BUILDING_DESELECTED, this.onBuildingDeselected, this);
+        
+        // 网格事件
+        GridEvents.on(EVENT_BUILDING_PLACED, this.onBuildingPlaced, this);
     }
     
     private removeEventListeners() {
         BattleEvents.off(EVENT_STATE_CHANGED, this.onBattleStateChanged, this);
         BattleEvents.off(EVENT_BATTLE_WIN, this.onBattleWin, this);
         BattleEvents.off(EVENT_BATTLE_LOSE, this.onBattleLose, this);
+        
+        BuildingPanelEvents.off(EVENT_BUILDING_SELECTED, this.onBuildingSelected, this);
+        BuildingPanelEvents.off(EVENT_BUILDING_DESELECTED, this.onBuildingDeselected, this);
+        
+        GridEvents.off(EVENT_BUILDING_PLACED, this.onBuildingPlaced, this);
+    }
+    
+    /**
+     * 建筑选中回调
+     */
+    private onBuildingSelected(type: BuildingType) {
+        console.log(`[BattleScene] 选中建筑: ${BUILDING_NAMES[type]}`);
+        if (this.gridBuild) {
+            this.gridBuild.setSelectedBuildingType(type);
+        }
+    }
+    
+    /**
+     * 建筑取消选中回调
+     */
+    private onBuildingDeselected() {
+        console.log('[BattleScene] 取消选中建筑');
+        if (this.gridBuild) {
+            this.gridBuild.setSelectedBuildingType(null);
+        }
+    }
+    
+    /**
+     * 建筑放置成功回调
+     */
+    private onBuildingPlaced(building: any) {
+        console.log(`[BattleScene] 建筑放置成功: ${building.type}`);
+        
+        // 放置成功后取消选中（可选：保持选中以连续放置）
+        // if (this.buildingPanel) {
+        //     this.buildingPanel.deselectBuilding();
+        // }
+        
+        // 更新建筑面板按钮状态
+        if (this.buildingPanel) {
+            this.buildingPanel.updateAllButtons();
+        }
     }
     
     private setupButtons() {
@@ -131,6 +192,14 @@ export class BattleScene extends Component {
             this.startCombatBtn.active = showStartBtn;
         }
         
+        // 非部署阶段时，取消建筑选中并禁用网格
+        const isDeployPhase = newState === BattleState.DeployFast || newState === BattleState.DeployTune;
+        if (!isDeployPhase) {
+            if (this.gridBuild) {
+                this.gridBuild.setSelectedBuildingType(null);
+            }
+        }
+        
         // 更新教学提示
         this.updateTutorial(newState);
     }
@@ -143,13 +212,13 @@ export class BattleScene extends Component {
         
         switch (state) {
             case BattleState.DeployFast:
-                this.tutorialLabel.string = '快速落子阶段 - 从底部拖拽建筑到格子';
+                this.tutorialLabel.string = '【快速落子】点击下方建筑按钮，再点击绿色格子放置';
                 break;
             case BattleState.DeployTune:
-                this.tutorialLabel.string = '微调阶段 - 调整布局或点击「开战」';
+                this.tutorialLabel.string = '【微调确认】继续部署或点击「开战」';
                 break;
             case BattleState.Combat:
-                this.tutorialLabel.string = '战斗中 - 点击屏幕控制主角朝向';
+                this.tutorialLabel.string = '【战斗中】建筑自动攻击（按钮已禁用）';
                 break;
             case BattleState.WaveClear:
                 this.tutorialLabel.string = '波次清除！准备下一波...';

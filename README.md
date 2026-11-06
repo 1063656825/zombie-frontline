@@ -152,13 +152,94 @@ supply: 0-5;      // 补给线（开局 DP 加成）
 
 ---
 
-## Day2+ 开发计划
+## Day2 完成内容
 
-### Day2 — 部署窗落子
-- [ ] 底部三建筑按钮（机枪/炮轰/地雷）+ DP 消耗校验
-- [ ] 点按钮 → 在道路可建区落 L1
-- [ ] 快落 / 微调 UI 与「开战」跳过
-- [ ] 战斗窗禁用建造按钮
+### ✅ 底部三建筑按钮
+- **机枪塔**：2 DP（绿色按钮）
+- **炮轰塔**：3 DP（橙色按钮）
+- **地雷**：1 DP（紫色按钮）
+
+### ✅ 点选落子
+1. 点击建筑按钮选中（黄色边框高亮）
+2. 点击绿色可放置格子落下 L1 建筑
+3. 建筑立即显示为占位色块
+
+### ✅ DP 校验
+- 余额不足时按钮变灰，无法点击
+- 费用显示红色表示 DP 不足
+- 落子成功后自动扣除 DP
+
+### ✅ 战斗窗锁定
+- Combat/WaveClear/Settle 状态下：
+  - 建筑按钮全部禁用（灰显）
+  - 点击网格无反应
+  - 自动取消已选中的建筑
+
+### ✅ 网格渲染
+- 绿色格子：可放置区域
+- 红色格子：不可放置（敌人路径）
+- 黄色高亮：当前鼠标/触摸位置
+
+### 新增文件
+```
+assets/scripts/ui/BuildingPanel.ts   # 建筑选择面板
+```
+
+### 修改文件
+```
+assets/scripts/battle/GridBuild.ts   # 添加渲染与点击处理
+assets/scripts/core/BattleScene.ts   # 整合建筑面板
+```
+
+---
+
+## Day2 验收步骤
+
+### 1. 建筑按钮功能
+
+1. 打开 `Battle.scene` 并预览
+2. 在 DeployFast/DeployTune 阶段：
+   - 底部应显示三个建筑按钮
+   - 点击按钮，边框变黄色（选中状态）
+   - 再次点击取消选中
+
+### 2. 落子功能
+
+1. 选中一个建筑（如机枪塔）
+2. 点击屏幕中间的**绿色格子**
+3. 应看到：
+   - 控制台输出 `[GridBuild] 放置建筑: MachineGun 于 (x, y)`
+   - HUD 显示 DP 减少
+   - 格子上出现建筑色块
+
+### 3. DP 校验
+
+1. 消耗 DP 直到余额 < 3
+2. 炮轰按钮（3 DP）应变灰
+3. 点击灰色按钮无反应
+
+### 4. 战斗锁定
+
+1. 点击「开战」进入 Combat 状态
+2. 所有建筑按钮应变灰
+3. 点击网格无反应
+4. 控制台输出 `[GridBuild] 非部署阶段，无法放置`
+
+### 5. 控制台日志示例
+```
+[BattleScene] Day2: 建筑面板与网格交互已启用
+[GridBuild] 网格初始化完成: 6x4
+[BattleFlow] 状态切换: None → DeployFast
+[BuildingPanel] 选中建筑: 机枪塔
+[BattleScene] 选中建筑: 机枪塔
+[GridBuild] 建筑类型: MachineGun
+[GridBuild] 放置建筑: MachineGun 于 (0, 1), 消耗 2 DP
+[BattleScene] 建筑放置成功: MachineGun
+```
+
+---
+
+## Day3+ 开发计划
 
 ### Day3 — 战斗：敌人与建筑开火
 - [ ] 敌人沿路径移动；到据点扣 HP
@@ -209,7 +290,8 @@ GridBuild  Combat  EnemyWave
 | `GameData.ts` | 全局数据单例，HP/DP/Scrap/三线成长 |
 | `WaveConfig.ts` | 波次配置表，定义每波敌人组成和 DP 发放 |
 | `BuildingConfig.ts` | 建筑属性配置，DPS/射程/费用等 |
-| `GridBuild.ts` | 格子建造系统骨架（Day2 实现完整逻辑） |
+| `GridBuild.ts` | 格子建造系统，网格渲染与点击落子 |
+| `BuildingPanel.ts` | 底部建筑选择面板，DP 校验与状态联动 |
 | `Combat.ts` | 战斗系统骨架（Day3 实现完整逻辑） |
 
 ### 本地存储
@@ -226,4 +308,4 @@ GridBuild  Combat  EnemyWave
 
 ---
 
-*Last updated: Day1 骨架版本*
+*Last updated: Day2 部署窗落子版本*

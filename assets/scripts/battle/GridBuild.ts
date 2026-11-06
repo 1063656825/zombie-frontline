@@ -2,13 +2,14 @@
  * GridBuild.ts
  * 格子建造系统
  * 管理可放置格子、拖拽落子、同型合成
- * Day1 骨架：定义接口和数据结构，Day2 实现完整逻辑
+ * Day2: 网格渲染、点击落子、战斗锁定
  */
 
-import { _decorator, Component, Node, Vec2, Vec3, EventTarget } from 'cc';
+import { _decorator, Component, Node, Vec2, Vec3, EventTarget, Graphics, Color, UITransform, input, Input, EventTouch } from 'cc';
 import { BuildingType, BuildingLevel, getBuildingConfig, canMerge, BuildingStats } from './BuildingConfig';
 import { GameData } from '../data/GameData';
 import { BattleState } from './BattleFlow';
+import { PlaceholderGraphics, PLACEHOLDER_COLORS } from '../ui/PlaceholderGraphics';
 
 const { ccclass, property } = _decorator;
 
@@ -55,11 +56,20 @@ export class GridBuild extends Component {
     private readonly GRID_ROWS = 6;
     private readonly GRID_COLS = 4;
     private readonly CELL_SIZE = 80;  // 格子大小（像素）
+    private readonly GRID_OFFSET_Y = 50;  // 网格垂直偏移（相对屏幕中心）
     
     // 网格数据
     private _grid: GridCell[][] = [];
     private _buildings: Map<string, PlacedBuilding> = new Map();
     private _buildingIdCounter = 0;
+    
+    // 渲染节点
+    private _gridGraphics: Graphics | null = null;
+    private _buildingContainer: Node | null = null;
+    private _cellNodes: Map<string, Node> = new Map();
+    
+    // 当前选中的建筑类型（由 BuildingPanel 设置）
+    private _selectedBuildingType: BuildingType | null = null;
     
     // 当前拖拽状态
     private _isDragging = false;
@@ -69,20 +79,29 @@ export class GridBuild extends Component {
     // 战斗状态引用（用于判断是否可操作）
     private _currentBattleState: BattleState = BattleState.None;
     
+    // 高亮的格子
+    private _highlightedCell: GridPosition | null = null;
+    
     /**
      * 初始化网格
      */
-    initGrid() {
+    initGrid(buildingContainer?: Node) {
         this._grid = [];
         this._buildings.clear();
+        this._cellNodes.clear();
+        
+        // 设置建筑容器
+        if (buildingContainer) {
+            this._buildingContainer = buildingContainer;
+        }
         
         // 创建网格数据
         for (let row = 0; row < this.GRID_ROWS; row++) {
             this._grid[row] = [];
             for (let col = 0; col < this.GRID_COLS; col++) {
-                // 计算世界坐标（居中）
+                // 计算世界坐标（居中，带垂直偏移）
                 const worldX = (col - this.GRID_COLS / 2 + 0.5) * this.CELL_SIZE;
-                const worldY = (row - this.GRID_ROWS / 2 + 0.5) * this.CELL_SIZE;
+                const worldY = (row - this.GRID_ROWS / 2 + 0.5) * this.CELL_SIZE + this.GRID_OFFSET_Y;
                 
                 this._grid[row][col] = {
                     position: { row, col },
@@ -94,7 +113,182 @@ export class GridBuild extends Component {
             }
         }
         
+        // 渲染网格
+        this.renderGrid();
+        
+        // 注册触摸事件
+        this.setupTouchEvents();
+        
         console.log(`[GridBuild] 网格初始化完成: ${this.GRID_ROWS}x${this.GRID_COLS}`);
+    }
+    
+    /**
+     * 渲染网格
+     */
+    renderGrid() {
+        // 获取或创建 Graphics 组件
+        if (!this._gridGraphics) {
+            this._gridGraphics = this.node.getComponent(Graphics);
+            if (!this._gridGraphics) {
+                this._gridGraphics = this.node.addComponent(Graphics);
+            }
+        }
+        
+        this._gridGraphics.clear();
+        
+        // 绘制所有格子
+        for (let row = 0; row < this.GRID_ROWS; row++) {
+            for (let col = 0; col < this.GRID_COLS; col++) {
+                const cell = this._grid[row][col];
+                this.drawCell(cell, false);
+            }
+        }
+    }
+    
+    /**
+     * 绘制单个格子
+     */
+    private drawCell(cell: GridCell, isHighlighted: boolean) {
+        if (!this._gridGraphics) return;
+        
+        const x = cell.worldPos.x - this.CELL_SIZE / 2;
+        const y = cell.worldPos.y - this.CELL_SIZE / 2;
+        const padding = 2;
+        
+        // 根据状态选择颜色
+        let fillColor: Color;
+        if (isHighlighted && cell.isValid && !cell.isOccupied) {
+            fillColor = PLACEHOLDER_COLORS.GRID_HIGHLIGHT;
+        } else if (cell.isValid) {
+            fillColor = cell.isOccupied 
+                ? new Color(80, 80, 80, 60) 
+                : PLACEHOLDER_COLORS.GRID_VALID;
+        } else {
+            fillColor = PLACEHOLDER_COLORS.GRID_INVALID;
+        }
+        
+        // 填充
+        this._gridGraphics.fillColor = fillColor;
+        this._gridGraphics.rect(x + padding, y + padding, this.CELL_SIZE - padding * 2, this.CELL_SIZE - padding * 2);
+        this._gridGraphics.fill();
+        
+        // 边框
+        this._gridGraphics.strokeColor = isHighlighted 
+            ? new Color(255, 255, 100, 200) 
+            : new Color(255, 255, 255, 80);
+        this._gridGraphics.lineWidth = isHighlighted ? 2 : 1;
+        this._gridGraphics.rect(x, y, this.CELL_SIZE, this.CELL_SIZE);
+        this._gridGraphics.stroke();
+    }
+    
+    /**
+     * 设置触摸事件
+     */
+    private setupTouchEvents() {
+        // 确保节点有 UITransform 以接收触摸
+        let transform = this.node.getComponent(UITransform);
+        if (!transform) {
+            transform = this.node.addComponent(UITransform);
+        }
+        // 设置足够大的区域
+        transform.setContentSize(
+            this.GRID_COLS * this.CELL_SIZE + 100,
+            this.GRID_ROWS * this.CELL_SIZE + 100
+        );
+        
+        this.node.on(Node.EventType.TOUCH_END, this.onTouchEnd, this);
+        this.node.on(Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
+    }
+    
+    /**
+     * 触摸移动（高亮预览）
+     */
+    private onTouchMove(event: EventTouch) {
+        if (!this.canDeploy || !this._selectedBuildingType) return;
+        
+        const touchPos = event.getUILocation();
+        const localPos = this.node.getComponent(UITransform)?.convertToNodeSpaceAR(new Vec3(touchPos.x, touchPos.y, 0));
+        
+        if (localPos) {
+            const gridPos = this.worldToGrid(localPos);
+            if (gridPos && (!this._highlightedCell || 
+                this._highlightedCell.row !== gridPos.row || 
+                this._highlightedCell.col !== gridPos.col)) {
+                this._highlightedCell = gridPos;
+                this.updateGridHighlight();
+            }
+        }
+    }
+    
+    /**
+     * 触摸结束（放置建筑）
+     */
+    private onTouchEnd(event: EventTouch) {
+        if (!this.canDeploy) {
+            console.log('[GridBuild] 非部署阶段，无法放置');
+            return;
+        }
+        
+        if (!this._selectedBuildingType) {
+            console.log('[GridBuild] 未选中建筑类型');
+            return;
+        }
+        
+        const touchPos = event.getUILocation();
+        const localPos = this.node.getComponent(UITransform)?.convertToNodeSpaceAR(new Vec3(touchPos.x, touchPos.y, 0));
+        
+        if (!localPos) return;
+        
+        const gridPos = this.worldToGrid(localPos);
+        if (!gridPos) {
+            console.log('[GridBuild] 点击位置不在网格内');
+            return;
+        }
+        
+        // 尝试放置
+        const success = this.tryPlaceBuilding(this._selectedBuildingType, gridPos);
+        
+        if (success) {
+            // 放置成功后清除高亮
+            this._highlightedCell = null;
+            this.updateGridHighlight();
+        }
+    }
+    
+    /**
+     * 更新网格高亮
+     */
+    private updateGridHighlight() {
+        this.renderGrid();
+        
+        // 高亮当前格子
+        if (this._highlightedCell) {
+            const cell = this.getCell(this._highlightedCell);
+            if (cell) {
+                this.drawCell(cell, true);
+            }
+        }
+    }
+    
+    /**
+     * 设置选中的建筑类型
+     */
+    setSelectedBuildingType(type: BuildingType | null) {
+        this._selectedBuildingType = type;
+        console.log(`[GridBuild] 建筑类型: ${type || '无'}`);
+        
+        // 更新高亮显示
+        if (!type) {
+            this._highlightedCell = null;
+        }
+        this.updateGridHighlight();
+    }
+    
+    /**
+     * 获取选中的建筑类型
+     */
+    getSelectedBuildingType(): BuildingType | null {
+        return this._selectedBuildingType;
     }
     
     /**
@@ -133,7 +327,7 @@ export class GridBuild extends Component {
         
         const cell = this.getCell(gridPos);
         if (!cell || !cell.isValid || cell.isOccupied) {
-            console.log('[GridBuild] 格子不可用');
+            console.log(`[GridBuild] 格子不可用: valid=${cell?.isValid}, occupied=${cell?.isOccupied}`);
             return false;
         }
         
@@ -154,10 +348,26 @@ export class GridBuild extends Component {
         cell.isOccupied = true;
         cell.building = building;
         
-        console.log(`[GridBuild] 放置建筑: ${type} 于 (${gridPos.row}, ${gridPos.col})`);
+        // 创建建筑节点
+        this.createBuildingNode(building, cell.worldPos);
+        
+        // 更新网格渲染
+        this.renderGrid();
+        
+        console.log(`[GridBuild] 放置建筑: ${type} 于 (${gridPos.row}, ${gridPos.col}), 消耗 ${config.dpCost} DP`);
         GridEvents.emit(EVENT_BUILDING_PLACED, building);
         
         return true;
+    }
+    
+    /**
+     * 创建建筑节点（占位图形）
+     */
+    private createBuildingNode(building: PlacedBuilding, worldPos: Vec3) {
+        const container = this._buildingContainer || this.node;
+        const buildingNode = PlaceholderGraphics.createBuilding(container, building.type, building.level);
+        buildingNode.setPosition(worldPos);
+        building.node = buildingNode;
     }
     
     /**
@@ -250,8 +460,11 @@ export class GridBuild extends Component {
      * 世界坐标转格子坐标
      */
     worldToGrid(worldPos: Vec3): GridPosition | null {
+        // 考虑垂直偏移
+        const adjustedY = worldPos.y - this.GRID_OFFSET_Y;
+        
         const col = Math.floor((worldPos.x / this.CELL_SIZE) + this.GRID_COLS / 2);
-        const row = Math.floor((worldPos.y / this.CELL_SIZE) + this.GRID_ROWS / 2);
+        const row = Math.floor((adjustedY / this.CELL_SIZE) + this.GRID_ROWS / 2);
         
         if (row < 0 || row >= this.GRID_ROWS || col < 0 || col >= this.GRID_COLS) {
             return null;
