@@ -8,6 +8,7 @@
 import { _decorator, Component, Node, Label, Graphics, Color, UITransform, Vec3 } from 'cc';
 import { GameData } from '../data/GameData';
 import { AdService, AdSlot } from '../ads/AdService';
+import { AudioService, SfxId } from '../audio/AudioService';
 
 const { ccclass, property } = _decorator;
 
@@ -229,6 +230,9 @@ export class RevivePanel extends Component {
      */
     private async onReviveClick() {
         if (!this._canRevive || this._isWatchingAd) return;
+        
+        // Day8: UI 点击音效
+        AudioService.play(SfxId.UiClick);
         
         console.log('[RevivePanel] 请求复活广告');
         this._isWatchingAd = true;

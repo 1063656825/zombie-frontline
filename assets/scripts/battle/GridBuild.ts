@@ -12,6 +12,7 @@ import { GameData } from '../data/GameData';
 import { BattleState } from './BattleFlow';
 import { PlaceholderGraphics, PLACEHOLDER_COLORS } from '../ui/PlaceholderGraphics';
 import { MetaData, rollMergeRefund } from '../data/MetaData';
+import { AudioService, SfxId } from '../audio/AudioService';
 
 const { ccclass, property } = _decorator;
 
@@ -438,6 +439,10 @@ export class GridBuild extends Component {
         this.renderGrid();
         
         console.log(`[GridBuild] 放置建筑: ${type} 于 (${gridPos.row}, ${gridPos.col}), 消耗 ${config.dpCost} DP`);
+        
+        // Day8: 落子音效
+        AudioService.play(SfxId.Place);
+        
         GridEvents.emit(EVENT_BUILDING_PLACED, building);
         
         // 检查是否触发首次可合成
@@ -498,6 +503,10 @@ export class GridBuild extends Component {
         }
         
         console.log(`[GridBuild] 合成成功: ${targetBuilding.type} 升级到 L2`);
+        
+        // Day8: 合成音效
+        AudioService.play(SfxId.Merge);
+        
         GridEvents.emit(EVENT_BUILDING_MERGED, targetBuilding);
         
         return true;

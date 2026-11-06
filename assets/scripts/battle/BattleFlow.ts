@@ -10,6 +10,7 @@ import { _decorator, Component, Node, Label, EventTarget, director } from 'cc';
 import { GameData, GameEvents, EVENT_HP_CHANGED } from '../data/GameData';
 import { WaveConfig, WAVE_CONFIGS } from './WaveConfig';
 import { MetaData } from '../data/MetaData';
+import { AudioService, SfxId } from '../audio/AudioService';
 
 const { ccclass, property } = _decorator;
 
@@ -184,6 +185,9 @@ export class BattleFlow extends Component {
         
         this._timer = 0;  // 战斗阶段不使用倒计时
         
+        // Day8: 波次开始音效
+        AudioService.play(SfxId.WaveStart);
+        
         BattleEvents.emit(EVENT_WAVE_START, this._currentWave);
         this.changeState(BattleState.Combat);
         
@@ -241,6 +245,10 @@ export class BattleFlow extends Component {
         GameData.addScrap(baseScrap);
         
         this.changeState(BattleState.Settle);
+        
+        // Day8: 胜利音效
+        AudioService.play(SfxId.Win);
+        
         BattleEvents.emit(EVENT_BATTLE_WIN);
     }
     
@@ -270,6 +278,10 @@ export class BattleFlow extends Component {
             // 已用过复活，直接失败
             console.log('[BattleFlow] 已使用过复活，直接失败');
             this.changeState(BattleState.Settle);
+            
+            // Day8: 失败音效
+            AudioService.play(SfxId.Lose);
+            
             BattleEvents.emit(EVENT_BATTLE_LOSE);
         }
     }
@@ -316,6 +328,10 @@ export class BattleFlow extends Component {
     giveUpRevive() {
         console.log('[BattleFlow] 放弃复活');
         this.changeState(BattleState.Settle);
+        
+        // Day8: 失败音效
+        AudioService.play(SfxId.Lose);
+        
         BattleEvents.emit(EVENT_BATTLE_LOSE);
     }
     

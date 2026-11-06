@@ -9,6 +9,7 @@
 import { _decorator, Component, Node, Label, Graphics, Color, UITransform } from 'cc';
 import { GameData } from '../data/GameData';
 import { AdService, AdSlot } from '../ads/AdService';
+import { AudioService, SfxId } from '../audio/AudioService';
 
 const { ccclass, property } = _decorator;
 
@@ -308,6 +309,9 @@ export class SettlePanel extends Component {
             console.log('[SettlePanel] 双倍奖励不可用');
             return;
         }
+        
+        // Day8: UI 点击音效
+        AudioService.play(SfxId.UiClick);
         
         console.log('[SettlePanel] 请求双倍广告...');
         this._doubleState = DoubleRewardState.Watching;

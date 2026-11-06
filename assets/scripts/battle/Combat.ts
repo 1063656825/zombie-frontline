@@ -2,6 +2,7 @@
  * Combat.ts
  * 战斗系统
  * Day3: 敌人移动、建筑开火、地雷触发、主角射击
+ * Day8: 受击闪白、击退、炮轰爆炸圈、音效
  */
 
 import { _decorator, Component, Node, Vec3, EventTarget, Graphics, Color, UITransform } from 'cc';
@@ -11,6 +12,16 @@ import { GameData } from '../data/GameData';
 import { GridBuild, PlacedBuilding, GridPosition } from './GridBuild';
 import { PlaceholderGraphics, PLACEHOLDER_COLORS } from '../ui/PlaceholderGraphics';
 import { MetaData, DAMAGE_REDUCTION_PERCENT } from '../data/MetaData';
+import { 
+    flashEnemy, 
+    flashBase,
+    calculateKnockbackVector, 
+    applyKnockbackWithClamp,
+    animateKnockback,
+    FLASH_DURATION_DEFAULT 
+} from '../effects/HitEffects';
+import { createExplosionRing, createMineExplosion } from '../effects/ExplosionVFX';
+import { AudioService, SfxId } from '../audio/AudioService';
 
 const { ccclass, property } = _decorator;
 
@@ -194,8 +205,17 @@ export class Combat extends Component {
     
     /**
      * 对敌人造成伤害
+     * @param enemy 敌人实例
+     * @param damage 基础伤害
+     * @param tankBonus 对胖尸加成
+     * @param damageSourcePos 伤害来源位置（用于计算击退方向）
      */
-    damageEnemy(enemy: EnemyInstance, damage: number, tankBonus: number = 1): boolean {
+    damageEnemy(
+        enemy: EnemyInstance, 
+        damage: number, 
+        tankBonus: number = 1,
+        damageSourcePos: Vec3 | null = null
+    ): boolean {
         if (enemy.isDead) return false;
         
         // 应用火力加成
@@ -210,12 +230,62 @@ export class Combat extends Component {
         enemy.hp -= finalDamage;
         CombatEvents.emit(EVENT_ENEMY_DAMAGED, enemy, finalDamage);
         
+        // Day8: 受击闪白
+        if (enemy.node) {
+            flashEnemy(enemy.node, FLASH_DURATION_DEFAULT);
+        }
+        
+        // Day8: 击退（非 Boss 类型）
+        if (enemy.type !== EnemyType.Z3_Tank || Math.random() < 0.3) {
+            this.applyKnockback(enemy, damageSourcePos);
+        }
+        
+        // Day8: 受击音效
+        AudioService.play(SfxId.EnemyHit);
+        
         if (enemy.hp <= 0) {
             this.killEnemy(enemy);
             return true;
         }
         
         return false;
+    }
+    
+    /**
+     * Day8: 应用击退效果
+     */
+    private applyKnockback(enemy: EnemyInstance, damageSourcePos: Vec3 | null) {
+        // 计算当前路径方向
+        let pathDir: Vec3 | null = null;
+        const currentTarget = enemy.pathPoints[enemy.currentPathIndex];
+        if (currentTarget) {
+            pathDir = new Vec3();
+            Vec3.subtract(pathDir, currentTarget.position, enemy.position);
+            if (pathDir.length() > 0.001) {
+                pathDir.normalize();
+            } else {
+                pathDir = null;
+            }
+        }
+        
+        // 计算击退向量
+        const knockbackVec = calculateKnockbackVector(
+            enemy.type,
+            enemy.position,
+            damageSourcePos,
+            pathDir
+        );
+        
+        if (knockbackVec.length() < 0.001) return;
+        
+        // 应用击退并限制位置
+        const newPos = applyKnockbackWithClamp(enemy.position, knockbackVec);
+        enemy.position.set(newPos);
+        
+        // 动画移动节点
+        if (enemy.node) {
+            animateKnockback(enemy.node, newPos, 0.08);
+        }
     }
     
     /**
@@ -252,6 +322,7 @@ export class Combat extends Component {
         if (GameData.hasDamageReduction()) {
             const reduction = damage * (DAMAGE_REDUCTION_PERCENT / 100);
             damage = Math.max(1, damage - reduction);
+            console.log(`[Combat] 城防减伤: 伤害 ${stats.damage} → ${damage.toFixed(1)}`);
         }
         
         GameData.hp -= damage;
@@ -259,8 +330,29 @@ export class Combat extends Component {
         console.log(`[Combat] ${enemy.type} 到达据点，造成 ${damage.toFixed(1)} 伤害，剩余 HP: ${GameData.hp}`);
         CombatEvents.emit(EVENT_BASE_DAMAGED, enemy, damage);
         
+        // Day8: 据点受击闪烁和音效
+        AudioService.play(SfxId.BaseHit);
+        
         // 敌人到达后消失
         this.killEnemy(enemy);
+    }
+    
+    /**
+     * 设置据点节点引用（用于据点闪烁效果）
+     */
+    private _baseNode: Node | null = null;
+    
+    setBaseNode(node: Node) {
+        this._baseNode = node;
+    }
+    
+    /**
+     * Day8: 触发据点闪烁效果
+     */
+    flashBaseEffect() {
+        if (this._baseNode) {
+            flashBase(this._baseNode, 0.12);
+        }
     }
     
     /**
@@ -509,13 +601,23 @@ export class Combat extends Component {
                 if (building.type === BuildingType.Cannon && config.aoeRadius) {
                     const enemies = this.findEnemiesInRange(target.position, config.aoeRadius * 80);
                     for (const e of enemies) {
-                        this.damageEnemy(e, damagePerShot * 0.7, config.tankBonus || 1);
+                        this.damageEnemy(e, damagePerShot * 0.7, config.tankBonus || 1, target.position);
                     }
                     // 主目标受全额伤害
-                    this.damageEnemy(target, damagePerShot * 0.3, config.tankBonus || 1);
+                    this.damageEnemy(target, damagePerShot * 0.3, config.tankBonus || 1, buildingPos);
+                    
+                    // Day8: 炮轰爆炸圈 VFX
+                    const vfxContainer = this.enemyContainer || this.node;
+                    createExplosionRing(vfxContainer, target.position, building.level);
+                    
+                    // Day8: 炮轰音效
+                    AudioService.play(SfxId.CannonBoom);
                 } else {
                     // 单体攻击
-                    this.damageEnemy(target, damagePerShot);
+                    this.damageEnemy(target, damagePerShot, 1, buildingPos);
+                    
+                    // Day8: 射击音效
+                    AudioService.play(SfxId.Shoot);
                 }
                 
                 // 视觉反馈（简单闪烁）
@@ -561,7 +663,11 @@ export class Combat extends Component {
             damagePerShot *= (1 + firepowerBonus / 100);
         }
         
-        this.damageEnemy(target, damagePerShot);
+        // Day8: 传入伤害源位置用于击退
+        this.damageEnemy(target, damagePerShot, 1, this.PLAYER_POSITION);
+        
+        // Day8: 射击音效
+        AudioService.play(SfxId.Shoot);
         
         console.log(`[Combat] 主角射击 ${target.type}，造成 ${damagePerShot.toFixed(1)} 伤害`);
     }
@@ -598,8 +704,14 @@ export class Combat extends Component {
                 }
                 
                 for (const enemy of enemies) {
-                    this.damageEnemy(enemy, damage);
+                    // Day8: 传入地雷位置用于击退
+                    this.damageEnemy(enemy, damage, 1, minePos);
                 }
+                
+                // Day8: 地雷爆炸 VFX 和音效
+                const vfxContainer = this.enemyContainer || this.node;
+                createMineExplosion(vfxContainer, minePos, building.level);
+                AudioService.play(SfxId.MineBoom);
                 
                 // 标记待移除
                 minesToRemove.push(building.gridPos);
