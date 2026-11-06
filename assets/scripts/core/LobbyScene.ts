@@ -1,14 +1,33 @@
 /**
  * LobbyScene.ts
  * 大厅场景控制器
- * 显示三线成长、开始战斗按钮
+ * Day6: 三线升级 UI、持久化、开始战斗
  */
 
-import { _decorator, Component, Label, director, Button, Node } from 'cc';
-import { GameData } from '../data/GameData';
+import { _decorator, Component, Label, director, Node, Graphics, Color, UITransform } from 'cc';
+import { GameData, GameEvents, EVENT_SCRAP_CHANGED } from '../data/GameData';
+import { 
+    MetaData, 
+    UpgradeLine, 
+    getUpgradeCost, 
+    MAX_LEVEL,
+    getFirepowerEffectText,
+    getFortEffectText,
+    getSupplyEffectText
+} from '../data/MetaData';
 import { SCENE_BATTLE } from './SceneManager';
 
 const { ccclass, property } = _decorator;
+
+interface UpgradeRowUI {
+    container: Node;
+    titleLabel: Label;
+    levelLabel: Label;
+    effectLabel: Label;
+    costLabel: Label;
+    button: Node;
+    buttonLabel: Label;
+}
 
 @ccclass('LobbyScene')
 export class LobbyScene extends Component {
@@ -16,49 +35,263 @@ export class LobbyScene extends Component {
     @property(Label)
     scrapLabel: Label | null = null;
     
-    @property(Label)
-    firepowerLabel: Label | null = null;
-    
-    @property(Label)
-    defenseLabel: Label | null = null;
-    
-    @property(Label)
-    supplyLabel: Label | null = null;
-    
     @property(Node)
     startBattleBtn: Node | null = null;
+    
+    @property(Node)
+    upgradeContainer: Node | null = null;
+    
+    // 升级行 UI
+    private _firepowerRow: UpgradeRowUI | null = null;
+    private _fortRow: UpgradeRowUI | null = null;
+    private _supplyRow: UpgradeRowUI | null = null;
+    
+    // 首次提示是否已显示
+    private _firstTipShown = false;
     
     start() {
         console.log('[LobbyScene] 大厅场景开始');
         
-        this.updateUI();
+        // 创建升级 UI
+        this.createUpgradeUI();
         
         // 绑定按钮事件
         if (this.startBattleBtn) {
             this.startBattleBtn.on(Node.EventType.TOUCH_END, this.onStartBattle, this);
         }
+        
+        // 监听残骸变化
+        GameEvents.on(EVENT_SCRAP_CHANGED, this.onScrapChanged, this);
+        
+        this.updateUI();
+        
+        // 首次提示
+        this.showFirstTimeTip();
     }
     
+    onDestroy() {
+        GameEvents.off(EVENT_SCRAP_CHANGED, this.onScrapChanged, this);
+    }
+    
+    /**
+     * 创建升级 UI
+     */
+    private createUpgradeUI() {
+        const container = this.upgradeContainer || this.node;
+        
+        // 三行升级卡片
+        this._firepowerRow = this.createUpgradeRow(container, '🔥 火力', 0, UpgradeLine.Firepower);
+        this._fortRow = this.createUpgradeRow(container, '🛡️ 城防', -100, UpgradeLine.Fort);
+        this._supplyRow = this.createUpgradeRow(container, '📦 补给', -200, UpgradeLine.Supply);
+    }
+    
+    /**
+     * 创建单个升级行
+     */
+    private createUpgradeRow(parent: Node, title: string, yOffset: number, line: UpgradeLine): UpgradeRowUI {
+        const container = new Node(`UpgradeRow_${line}`);
+        container.parent = parent;
+        container.setPosition(0, yOffset + 150, 0);
+        
+        // 背景
+        const bg = container.addComponent(Graphics);
+        bg.fillColor = new Color(40, 45, 55, 230);
+        bg.roundRect(-320, -40, 640, 80, 10);
+        bg.fill();
+        bg.strokeColor = new Color(100, 100, 120, 200);
+        bg.lineWidth = 2;
+        bg.roundRect(-320, -40, 640, 80, 10);
+        bg.stroke();
+        
+        const transform = container.addComponent(UITransform);
+        transform.setContentSize(640, 80);
+        
+        // 标题
+        const titleNode = new Node('Title');
+        titleNode.parent = container;
+        titleNode.setPosition(-250, 15, 0);
+        const titleLabel = titleNode.addComponent(Label);
+        titleLabel.string = title;
+        titleLabel.fontSize = 24;
+        titleLabel.lineHeight = 30;
+        titleLabel.color = new Color(255, 255, 255, 255);
+        
+        // 等级
+        const levelNode = new Node('Level');
+        levelNode.parent = container;
+        levelNode.setPosition(-250, -15, 0);
+        const levelLabel = levelNode.addComponent(Label);
+        levelLabel.string = 'Lv.0';
+        levelLabel.fontSize = 18;
+        levelLabel.lineHeight = 24;
+        levelLabel.color = new Color(180, 180, 180, 255);
+        
+        // 下一级效果
+        const effectNode = new Node('Effect');
+        effectNode.parent = container;
+        effectNode.setPosition(0, 0, 0);
+        const effectLabel = effectNode.addComponent(Label);
+        effectLabel.string = '下一级: ...';
+        effectLabel.fontSize = 18;
+        effectLabel.lineHeight = 24;
+        effectLabel.color = new Color(255, 215, 0, 255);
+        
+        // 费用
+        const costNode = new Node('Cost');
+        costNode.parent = container;
+        costNode.setPosition(180, 15, 0);
+        const costLabel = costNode.addComponent(Label);
+        costLabel.string = '费用: 20';
+        costLabel.fontSize = 16;
+        costLabel.lineHeight = 22;
+        costLabel.color = new Color(200, 200, 200, 255);
+        
+        // 升级按钮
+        const button = new Node('Button');
+        button.parent = container;
+        button.setPosition(250, 0, 0);
+        const btnTransform = button.addComponent(UITransform);
+        btnTransform.setContentSize(100, 50);
+        
+        const btnGraphics = button.addComponent(Graphics);
+        btnGraphics.fillColor = new Color(50, 150, 50, 255);
+        btnGraphics.roundRect(-50, -25, 100, 50, 8);
+        btnGraphics.fill();
+        
+        const btnLabelNode = new Node('Label');
+        btnLabelNode.parent = button;
+        const buttonLabel = btnLabelNode.addComponent(Label);
+        buttonLabel.string = '升级';
+        buttonLabel.fontSize = 20;
+        buttonLabel.lineHeight = 26;
+        buttonLabel.color = new Color(255, 255, 255, 255);
+        
+        // 绑定升级事件
+        button.on(Node.EventType.TOUCH_END, () => this.onUpgrade(line), this);
+        
+        return {
+            container,
+            titleLabel,
+            levelLabel,
+            effectLabel,
+            costLabel,
+            button,
+            buttonLabel
+        };
+    }
+    
+    /**
+     * 更新 UI
+     */
     private updateUI() {
-        const progress = GameData.progress;
-        
+        // 残骸显示
         if (this.scrapLabel) {
-            this.scrapLabel.string = `残骸: ${GameData.scrap}`;
+            this.scrapLabel.string = `残骸: ${MetaData.scrap}`;
         }
         
-        if (this.firepowerLabel) {
-            const bonus = GameData.getFirepowerBonus();
-            this.firepowerLabel.string = `火力 Lv.${progress.firepower} (+${bonus}%)`;
+        // 更新三行
+        this.updateRow(this._firepowerRow, UpgradeLine.Firepower, getFirepowerEffectText);
+        this.updateRow(this._fortRow, UpgradeLine.Fort, getFortEffectText);
+        this.updateRow(this._supplyRow, UpgradeLine.Supply, getSupplyEffectText);
+    }
+    
+    /**
+     * 更新单行 UI
+     */
+    private updateRow(
+        row: UpgradeRowUI | null, 
+        line: UpgradeLine, 
+        getEffectText: (level: number) => string
+    ) {
+        if (!row) return;
+        
+        const level = this.getLevel(line);
+        const cost = getUpgradeCost(level);
+        const isMaxLevel = level >= MAX_LEVEL;
+        const canAfford = MetaData.scrap >= cost;
+        
+        // 等级
+        row.levelLabel.string = `Lv.${level}`;
+        
+        // 效果
+        if (isMaxLevel) {
+            row.effectLabel.string = '已满级';
+            row.effectLabel.color = new Color(100, 255, 100, 255);
+        } else {
+            row.effectLabel.string = `下一级: ${getEffectText(level)}`;
+            row.effectLabel.color = new Color(255, 215, 0, 255);
         }
         
-        if (this.defenseLabel) {
-            const bonus = GameData.getDefenseBonus();
-            this.defenseLabel.string = `城防 Lv.${progress.defense} (+${bonus}HP)`;
+        // 费用
+        if (isMaxLevel) {
+            row.costLabel.string = '';
+        } else {
+            row.costLabel.string = `费用: ${cost}`;
+            row.costLabel.color = canAfford 
+                ? new Color(200, 200, 200, 255) 
+                : new Color(255, 100, 100, 255);
         }
         
-        if (this.supplyLabel) {
-            const bonus = GameData.getSupplyBonus();
-            this.supplyLabel.string = `补给 Lv.${progress.supply} (+${bonus}DP)`;
+        // 按钮状态
+        const btnGraphics = row.button.getComponent(Graphics);
+        if (btnGraphics) {
+            btnGraphics.clear();
+            if (isMaxLevel) {
+                btnGraphics.fillColor = new Color(80, 80, 80, 255);
+            } else if (canAfford) {
+                btnGraphics.fillColor = new Color(50, 150, 50, 255);
+            } else {
+                btnGraphics.fillColor = new Color(100, 80, 80, 255);
+            }
+            btnGraphics.roundRect(-50, -25, 100, 50, 8);
+            btnGraphics.fill();
+        }
+        
+        row.buttonLabel.string = isMaxLevel ? '满级' : '升级';
+    }
+    
+    /**
+     * 获取等级
+     */
+    private getLevel(line: UpgradeLine): number {
+        switch (line) {
+            case UpgradeLine.Firepower: return MetaData.firepowerLevel;
+            case UpgradeLine.Fort: return MetaData.fortLevel;
+            case UpgradeLine.Supply: return MetaData.supplyLevel;
+        }
+    }
+    
+    /**
+     * 升级回调
+     */
+    private onUpgrade(line: UpgradeLine) {
+        const success = MetaData.tryUpgrade(line);
+        if (success) {
+            console.log(`[LobbyScene] 升级 ${line} 成功`);
+            this.updateUI();
+        } else {
+            console.log(`[LobbyScene] 升级 ${line} 失败`);
+        }
+    }
+    
+    /**
+     * 残骸变化回调
+     */
+    private onScrapChanged(scrap: number) {
+        this.updateUI();
+    }
+    
+    /**
+     * 首次提示（建议升级补给）
+     */
+    private showFirstTimeTip() {
+        if (this._firstTipShown) return;
+        
+        // 如果补给还在 0 级且有足够残骸，显示提示
+        if (MetaData.supplyLevel === 0 && MetaData.scrap >= 20) {
+            this._firstTipShown = true;
+            console.log('[LobbyScene] 提示：建议先升级补给线，增加开局 DP');
+            // 可以添加一个临时气泡，但不阻塞
         }
     }
     
@@ -67,30 +300,7 @@ export class LobbyScene extends Component {
      */
     private onStartBattle() {
         console.log('[LobbyScene] 开始战斗');
+        console.log(`[LobbyScene] 当前三线: 火力=${MetaData.firepowerLevel}, 城防=${MetaData.fortLevel}, 补给=${MetaData.supplyLevel}`);
         director.loadScene(SCENE_BATTLE);
-    }
-    
-    /**
-     * 升级火力线（Day6 实现完整逻辑）
-     */
-    upgradeFirepower() {
-        console.log('[LobbyScene] 升级火力（待实现）');
-        this.updateUI();
-    }
-    
-    /**
-     * 升级城防线
-     */
-    upgradeDefense() {
-        console.log('[LobbyScene] 升级城防（待实现）');
-        this.updateUI();
-    }
-    
-    /**
-     * 升级补给线
-     */
-    upgradeSupply() {
-        console.log('[LobbyScene] 升级补给（待实现）');
-        this.updateUI();
     }
 }

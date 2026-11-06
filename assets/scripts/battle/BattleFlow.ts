@@ -3,11 +3,13 @@
  * 战斗流程状态机
  * 状态流转: DeployFast → DeployTune → Combat → WaveClear → (循环或 Settle)
  * Day4: 完善胜负判定、复活逻辑
+ * Day6: 应用补给加成 (C线)
  */
 
 import { _decorator, Component, Node, Label, EventTarget, director } from 'cc';
 import { GameData, GameEvents, EVENT_HP_CHANGED } from '../data/GameData';
 import { WaveConfig, WAVE_CONFIGS } from './WaveConfig';
+import { MetaData } from '../data/MetaData';
 
 const { ccclass, property } = _decorator;
 
@@ -133,12 +135,27 @@ export class BattleFlow extends Component {
         
         // 发放本波 DP
         if (this._waveConfig) {
-            GameData.addDP(this._waveConfig.dpGrant);
-            console.log(`[BattleFlow] 波次 ${this._currentWave} 发放 DP: +${this._waveConfig.dpGrant}`);
+            let dpGrant = this._waveConfig.dpGrant;
+            
+            // Day6: 补给线 C≥3 每波 DP +1
+            if (GameData.hasWaveDpBonus()) {
+                dpGrant += 1;
+                console.log(`[BattleFlow] 补给加成: 每波 DP +1`);
+            }
+            
+            GameData.addDP(dpGrant);
+            console.log(`[BattleFlow] 波次 ${this._currentWave} 发放 DP: +${dpGrant}`);
         }
         
-        // W0 教学波使用较短的快落时间
-        const fastTime = this._currentWave === 0 ? 6 : this.DEPLOY_FAST_TIME;
+        // 计算快落时间
+        let fastTime = this._currentWave === 0 ? 6 : this.DEPLOY_FAST_TIME;
+        
+        // Day6: 补给线 C≥4 DeployFast +1s
+        if (GameData.hasDeployFastBonus()) {
+            fastTime += 1;
+            console.log(`[BattleFlow] 补给加成: DeployFast +1s`);
+        }
+        
         this._timer = fastTime;
         
         this.changeState(BattleState.DeployFast);

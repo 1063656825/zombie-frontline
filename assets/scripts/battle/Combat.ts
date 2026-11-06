@@ -10,6 +10,7 @@ import { BuildingType, getBuildingConfig, BuildingLevel } from './BuildingConfig
 import { GameData } from '../data/GameData';
 import { GridBuild, PlacedBuilding, GridPosition } from './GridBuild';
 import { PlaceholderGraphics, PLACEHOLDER_COLORS } from '../ui/PlaceholderGraphics';
+import { MetaData, DAMAGE_REDUCTION_PERCENT } from '../data/MetaData';
 
 const { ccclass, property } = _decorator;
 
@@ -245,10 +246,18 @@ export class Combat extends Component {
      */
     private enemyReachBase(enemy: EnemyInstance) {
         const stats = ENEMY_STATS[enemy.type];
-        GameData.hp -= stats.damage;
+        let damage = stats.damage;
         
-        console.log(`[Combat] ${enemy.type} 到达据点，造成 ${stats.damage} 伤害，剩余 HP: ${GameData.hp}`);
-        CombatEvents.emit(EVENT_BASE_DAMAGED, enemy, stats.damage);
+        // Day6: 城防线 B≥3 受击减伤 3%
+        if (GameData.hasDamageReduction()) {
+            const reduction = damage * (DAMAGE_REDUCTION_PERCENT / 100);
+            damage = Math.max(1, damage - reduction);
+        }
+        
+        GameData.hp -= damage;
+        
+        console.log(`[Combat] ${enemy.type} 到达据点，造成 ${damage.toFixed(1)} 伤害，剩余 HP: ${GameData.hp}`);
+        CombatEvents.emit(EVENT_BASE_DAMAGED, enemy, damage);
         
         // 敌人到达后消失
         this.killEnemy(enemy);
@@ -489,8 +498,12 @@ export class Combat extends Component {
             if (state.lastFireTime >= fireInterval) {
                 state.lastFireTime = 0;
                 
-                // 计算伤害
-                const damagePerShot = config.dps / config.fireRate;
+                // 计算伤害 (Day6: 应用火力加成)
+                let damagePerShot = config.dps / config.fireRate;
+                const firepowerBonus = GameData.getFirepowerBonus();
+                if (firepowerBonus > 0) {
+                    damagePerShot *= (1 + firepowerBonus / 100);
+                }
                 
                 // 炮轰是 AOE
                 if (building.type === BuildingType.Cannon && config.aoeRadius) {
@@ -541,7 +554,13 @@ export class Combat extends Component {
             return distB < distA ? e : nearest;
         });
         
-        const damagePerShot = this.PLAYER_DPS / this.PLAYER_FIRE_RATE;
+        // Day6: 主角也应用火力加成
+        let damagePerShot = this.PLAYER_DPS / this.PLAYER_FIRE_RATE;
+        const firepowerBonus = GameData.getFirepowerBonus();
+        if (firepowerBonus > 0) {
+            damagePerShot *= (1 + firepowerBonus / 100);
+        }
+        
         this.damageEnemy(target, damagePerShot);
         
         console.log(`[Combat] 主角射击 ${target.type}，造成 ${damagePerShot.toFixed(1)} 伤害`);
@@ -571,8 +590,13 @@ export class Combat extends Component {
             if (enemies.length > 0) {
                 console.log(`[Combat] 地雷触发！影响 ${enemies.length} 个敌人`);
                 
-                // 对范围内敌人造成伤害
-                const damage = config.triggerDamage || 25;
+                // 对范围内敌人造成伤害 (Day6: 应用火力加成)
+                let damage = config.triggerDamage || 25;
+                const firepowerBonus = GameData.getFirepowerBonus();
+                if (firepowerBonus > 0) {
+                    damage *= (1 + firepowerBonus / 100);
+                }
+                
                 for (const enemy of enemies) {
                     this.damageEnemy(enemy, damage);
                 }

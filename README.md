@@ -569,16 +569,152 @@ npx vitest run tests/day5.test.ts
 
 ---
 
-## Day6+ 开发计划
+## Day6 完成内容
 
-### Day6 — 三线成长
-- [ ] Lobby 三线升级 UI + 费用表
-- [ ] 升级持久化
-- [ ] 局内读取加成
+### ✅ Meta 持久化层
+- 新建 `MetaData.ts`：独立的三线成长数据管理
+- 存储键：`zombie_frontline_meta_v1`
+- WeChat (`wx.setStorageSync`) / localStorage / 内存回退兼容
+- 原子读写：升级失败不扣 scrap
+
+### ✅ 三线升级费用表
+
+| 等级 | 费用 | 火力 (A) | 城防 (B) | 补给 (C) |
+|------|------|----------|----------|----------|
+| 0→1 | 20 | 伤害 +8% | HP +15 | 开局 DP +1 |
+| 1→2 | 40 | 累计 +16% | HP +30 | 累计 DP +2 |
+| 2→3 | 80 | 累计 +26% | HP +50 | 每波 DP +1 |
+| 3→4 | 150 | 累计 +38% | 受击减伤 3% | DeployFast +1s |
+| 4→5 | 250 | 累计 +52% | HP +75 | 合成 50% 返还 1 DP |
+
+### ✅ Lobby 升级 UI
+- 三行升级卡片：🔥 火力 / 🛡️ 城防 / 📦 补给
+- 显示：当前等级、下一级效果、费用、当前 scrap
+- 升级按钮：scrap 不足灰显、满级禁用
+- 升级成功：扣费、刷新 UI、持久化
+
+### ✅ 战斗读取 Meta 加成
+- **火力线 (A)**：所有建筑 + 主角伤害乘以 `(1 + bonus%)`
+- **城防线 (B)**：maxHp = 100 + bonus，B≥3 受击减伤 3%
+- **补给线 (C)**：
+  - 开局 DP = 2 + bonus
+  - C≥3：每波 DP 发放 +1
+  - C≥4：DeployFast 时长 +1s
+  - C=5：合成成功 50% 返还 1 DP
+
+### ✅ SettlePanel 残骸持久化
+- 胜利/双倍残骸通过 `MetaData.addScrap` 写入
+- 返回 Lobby 后可见余额更新
+
+### 新增文件
+```
+assets/scripts/data/MetaData.ts      # 三线成长持久化层
+tests/day6.test.ts                   # 41 个单元测试
+```
+
+### 修改文件
+```
+assets/scripts/data/GameData.ts      # 从 MetaData 读取 scrap 和三线效果
+assets/scripts/core/LobbyScene.ts    # 三线升级 UI
+assets/scripts/battle/BattleFlow.ts  # 应用补给加成 (C线)
+assets/scripts/battle/Combat.ts      # 应用火力加成 (A线)、城防减伤 (B线)
+assets/scripts/battle/GridBuild.ts   # 合成返还 DP (C5)
+```
+
+---
+
+## Day6 验收步骤
+
+### 1. Lobby 升级 UI
+
+1. 启动游戏，进入 Lobby
+2. 查看三行升级卡片
+3. 确认显示：当前等级、下一级效果、费用
+4. 初始 scrap=0，升级按钮应灰显
+
+### 2. 获取残骸并升级
+
+1. 进入 Battle，通关 W0-W5
+2. 胜利后获得 30 残骸（双倍 60）
+3. 返回 Lobby，确认 scrap 余额更新
+4. 点击「升级」按钮，确认：
+   - 等级 +1
+   - scrap 扣除
+   - 效果文本更新
+
+### 3. 持久化验证
+
+1. 升级后刷新页面
+2. 重新进入 Lobby
+3. 确认等级和 scrap 保持不变
+
+### 4. 战斗加成验证
+
+1. 升级火力 Lv.1 (+8%)
+2. 进入 Battle，观察建筑伤害日志
+3. 确认伤害比升级前高 8%
+
+### 5. 补给加成验证
+
+1. 升级补给至 Lv.3
+2. 进入 Battle，观察：
+   - 每波 DP 发放 +1
+   - 控制台输出 `[BattleFlow] 补给加成: 每波 DP +1`
+
+### 6. 城防加成验证
+
+1. 升级城防至 Lv.3
+2. 进入 Battle，观察：
+   - maxHp = 150（基础 100 + 50）
+   - 敌人到达据点时受击减伤
+
+### 7. 合成返还验证 (C5)
+
+1. 升级补给至 Lv.5
+2. 进入 Battle，合成建筑
+3. 约 50% 概率返还 1 DP
+4. 控制台输出 `[GridBuild] 补给加成: 合成返还 1 DP`
+
+### 控制台日志示例
+```
+[LobbyScene] 大厅场景开始
+[MetaData] 读档成功: {scrap: 60, firepower: 1, fort: 0, supply: 0}
+[LobbyScene] 开始战斗
+[LobbyScene] 当前三线: 火力=1, 城防=0, 补给=0
+[GameData] initBattle: maxHp=100, startDp=2
+[GameData] 三线加成: 火力+8%, 城防+0HP, 补给+0DP
+[BattleFlow] 波次 0 发放 DP: +3
+[Combat] 机枪攻击 Z1，伤害 1.62 (基础 1.5 * 1.08)
+...
+[SettlePanel] 模拟广告成功，额外获得: +30，总计: 60
+[MetaData] Scrap +60, 总计: 120
+```
+
+---
+
+## Day6 单元测试
+
+运行测试：
+```bash
+npx vitest run tests/day6.test.ts
+```
+
+测试覆盖（41 个）：
+- 升级费用表：0→5 各级费用正确
+- 火力线效果：累计伤害百分比
+- 城防线效果：累计 HP、减伤门槛
+- 补给线效果：开局 DP、波次 DP、DeployFast、合成返还
+- 升级逻辑：扣费、等级递增、软上限、scrap 不足拒绝
+- 持久化：save/load round-trip
+- 合成返还概率：50% 门槛验证
+
+---
+
+## Day7+ 开发计划
 
 ### Day7 — 微信与广告桩
 - [ ] 微信登录/分享空钩子
-- [ ] 激励视频三坑接口
+- [ ] 激励视频三坑接口（复活、双倍、补给箱）
 - [ ] 内测包打包
 
 ---
@@ -611,6 +747,7 @@ GridBuild  Combat  EnemyWave
 | `RevivePanel.ts` | 复活面板 UI，Mock 广告延迟 |
 | `SettlePanel.ts` | 结算面板 UI，胜利/失败显示，双倍奖励 |
 | `TutorialGuide.ts` | 引导气泡，首次落子/战斗/合成 |
+| `MetaData.ts` | 三线成长持久化层，升级费用表，效果计算 |
 
 ### 本地存储
 
@@ -626,4 +763,4 @@ GridBuild  Combat  EnemyWave
 
 ---
 
-*Last updated: Day5 合成与引导版本*
+*Last updated: Day6 三线成长版本*

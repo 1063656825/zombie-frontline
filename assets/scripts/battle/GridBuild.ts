@@ -11,6 +11,7 @@ import { BuildingType, BuildingLevel, getBuildingConfig, canMerge, BuildingStats
 import { GameData } from '../data/GameData';
 import { BattleState } from './BattleFlow';
 import { PlaceholderGraphics, PLACEHOLDER_COLORS } from '../ui/PlaceholderGraphics';
+import { MetaData, rollMergeRefund } from '../data/MetaData';
 
 const { ccclass, property } = _decorator;
 
@@ -489,6 +490,12 @@ export class GridBuild extends Component {
         
         // 更新目标建筑节点外观为 L2
         this.updateBuildingNodeAppearance(targetBuilding, targetCell.worldPos);
+        
+        // Day6: 补给线 C=5 合成 50% 返还 1 DP
+        if (GameData.hasMergeRefundChance() && rollMergeRefund()) {
+            GameData.addDP(1);
+            console.log(`[GridBuild] 补给加成: 合成返还 1 DP`);
+        }
         
         console.log(`[GridBuild] 合成成功: ${targetBuilding.type} 升级到 L2`);
         GridEvents.emit(EVENT_BUILDING_MERGED, targetBuilding);

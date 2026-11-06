@@ -1,10 +1,11 @@
 /**
  * GameData.ts
  * 游戏核心数据模型 - 据点 HP、DP、Scrap
- * 可序列化为 JSON，供存档/读档使用
+ * Day6: 从 MetaData 读取三线加成
  */
 
 import { _decorator, Component, EventTarget } from 'cc';
+import { MetaData } from './MetaData';
 
 // 事件总线，用于数据变化通知
 export const GameEvents = new EventTarget();
@@ -55,14 +56,6 @@ export class GameDataManager {
     private _maxHp: number = 100;
     private _dp: number = 2;        // 开局 DP
     private _maxDp: number = 12;    // DP 囤积上限
-    private _scrap: number = 0;
-    
-    // 三线成长
-    private _progress: IProgressData = {
-        firepower: 0,
-        defense: 0,
-        supply: 0
-    };
     
     // 当前关卡状态
     private _currentWave: number = 0;
@@ -132,47 +125,75 @@ export class GameDataManager {
         this.dp = this._dp + amount;
     }
     
-    // ========== Scrap 相关 ==========
-    get scrap(): number { return this._scrap; }
-    set scrap(value: number) {
-        const oldValue = this._scrap;
-        this._scrap = Math.max(0, value);
-        if (oldValue !== this._scrap) {
-            GameEvents.emit(EVENT_SCRAP_CHANGED, this._scrap);
-        }
+    // ========== Scrap 相关 (从 MetaData 读取) ==========
+    get scrap(): number { 
+        return MetaData.scrap; 
     }
     
+    /**
+     * 增加残骸（写入 MetaData 持久化）
+     */
     addScrap(amount: number): void {
-        this.scrap = this._scrap + amount;
+        MetaData.addScrap(amount);
+        GameEvents.emit(EVENT_SCRAP_CHANGED, MetaData.scrap);
     }
     
-    // ========== 三线成长 ==========
+    // ========== 三线成长 (从 MetaData 读取) ==========
     get progress(): IProgressData {
-        return { ...this._progress };
+        return {
+            firepower: MetaData.firepowerLevel,
+            defense: MetaData.fortLevel,
+            supply: MetaData.supplyLevel
+        };
     }
     
     /**
      * 获取火力加成（百分比）
      */
     getFirepowerBonus(): number {
-        const bonuses = [0, 8, 16, 26, 38, 52];
-        return bonuses[this._progress.firepower] || 0;
+        return MetaData.getFirepowerBonus();
     }
     
     /**
      * 获取额外 HP
      */
     getDefenseBonus(): number {
-        const bonuses = [0, 15, 30, 50, 50, 75];
-        return bonuses[this._progress.defense] || 0;
+        return MetaData.getFortHpBonus();
     }
     
     /**
      * 获取开局额外 DP
      */
     getSupplyBonus(): number {
-        const bonuses = [0, 1, 2, 2, 2, 2];
-        return bonuses[this._progress.supply] || 0;
+        return MetaData.getSupplyStartDpBonus();
+    }
+    
+    /**
+     * 是否有每波 DP +1 加成 (C≥3)
+     */
+    hasWaveDpBonus(): boolean {
+        return MetaData.hasWaveDpBonus();
+    }
+    
+    /**
+     * 是否有 DeployFast +1s 加成 (C≥4)
+     */
+    hasDeployFastBonus(): boolean {
+        return MetaData.hasDeployFastBonus();
+    }
+    
+    /**
+     * 是否有合成返还 DP 几率 (C=5)
+     */
+    hasMergeRefundChance(): boolean {
+        return MetaData.hasMergeRefundChance();
+    }
+    
+    /**
+     * 是否有受击减伤 (B≥3)
+     */
+    hasDamageReduction(): boolean {
+        return MetaData.hasDamageReduction();
     }
     
     // ========== 关卡状态 ==========
@@ -187,20 +208,27 @@ export class GameDataManager {
      * 开始新关卡时重置战斗数据
      */
     initBattle(): void {
-        // 应用城防加成
-        this._maxHp = 100 + this.getDefenseBonus();
+        // 基础值
+        const baseHp = 100;
+        const baseDp = 2;
+        
+        // 应用城防加成 (B线)
+        this._maxHp = baseHp + this.getDefenseBonus();
         this._hp = this._maxHp;
         
-        // 应用补给加成
-        this._dp = 2 + this.getSupplyBonus();
+        // 应用补给加成 (C线)
+        this._dp = baseDp + this.getSupplyBonus();
         
         this._currentWave = 0;
+        
+        console.log(`[GameData] initBattle: maxHp=${this._maxHp}, startDp=${this._dp}`);
+        console.log(`[GameData] 三线加成: 火力+${this.getFirepowerBonus()}%, 城防+${this.getDefenseBonus()}HP, 补给+${this.getSupplyBonus()}DP`);
         
         GameEvents.emit(EVENT_HP_CHANGED, this._hp, this._maxHp);
         GameEvents.emit(EVENT_DP_CHANGED, this._dp, this._maxDp);
     }
     
-    // ========== 序列化 ==========
+    // ========== 序列化 (局内状态，meta 由 MetaData 管理) ==========
     toJSON(): ISaveData {
         return {
             base: {
@@ -208,9 +236,9 @@ export class GameDataManager {
                 maxHp: this._maxHp,
                 dp: this._dp,
                 maxDp: this._maxDp,
-                scrap: this._scrap
+                scrap: MetaData.scrap  // 读取 MetaData
             },
-            progress: { ...this._progress },
+            progress: this.progress,  // 读取 MetaData
             currentWave: this._currentWave,
             currentLevel: this._currentLevel
         };
@@ -222,10 +250,7 @@ export class GameDataManager {
             this._maxHp = data.base.maxHp ?? 100;
             this._dp = data.base.dp ?? 2;
             this._maxDp = data.base.maxDp ?? 12;
-            this._scrap = data.base.scrap ?? 0;
-        }
-        if (data.progress) {
-            this._progress = { ...data.progress };
+            // scrap 和 progress 由 MetaData 管理，不在此处加载
         }
         this._currentWave = data.currentWave ?? 0;
         this._currentLevel = data.currentLevel ?? 'L1-Tutorial';
@@ -264,16 +289,22 @@ export class GameDataManager {
     }
     
     /**
-     * 重置所有数据（调试用）
+     * 重置战斗状态（不重置 meta）
      */
     reset(): void {
         this._hp = 100;
         this._maxHp = 100;
         this._dp = 2;
-        this._scrap = 0;
-        this._progress = { firepower: 0, defense: 0, supply: 0 };
         this._currentWave = 0;
         this._currentLevel = 'L1-Tutorial';
+    }
+    
+    /**
+     * 完全重置（含 meta，调试用）
+     */
+    fullReset(): void {
+        this.reset();
+        MetaData.reset();
     }
 }
 
