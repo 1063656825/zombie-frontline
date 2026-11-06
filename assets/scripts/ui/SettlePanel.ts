@@ -2,6 +2,7 @@
  * SettlePanel.ts
  * 结算面板 UI
  * Day4: 胜利/失败结算显示
+ * Day5: 胜利双倍奖励（Mock 广告）
  */
 
 import { _decorator, Component, Node, Label, Graphics, Color, UITransform } from 'cc';
@@ -10,6 +11,13 @@ import { GameData } from '../data/GameData';
 const { ccclass, property } = _decorator;
 
 export type SettleCallback = () => void;
+
+// 双倍奖励状态
+enum DoubleRewardState {
+    Idle = 'idle',
+    Watching = 'watching',
+    Claimed = 'claimed'
+}
 
 @ccclass('SettlePanel')
 export class SettlePanel extends Component {
@@ -29,11 +37,20 @@ export class SettlePanel extends Component {
     @property(Node)
     confirmBtn: Node | null = null;
     
+    // 双倍按钮（Day5）
+    private _doubleBtn: Node | null = null;
+    private _doubleBtnLabel: Label | null = null;
+    
     // 回调
     private _onConfirm: SettleCallback | null = null;
     
     // 是否胜利
     private _isWin: boolean = false;
+    
+    // 双倍奖励状态（Day5）
+    private _doubleState: DoubleRewardState = DoubleRewardState.Idle;
+    private _baseScrap: number = 0;
+    private _totalScrap: number = 0;
     
     onLoad() {
         this.hide();
@@ -102,10 +119,31 @@ export class SettlePanel extends Component {
         this.scrapLabel.lineHeight = 36;
         this.scrapLabel.color = new Color(255, 215, 0, 255);
         
+        // 双倍奖励按钮（Day5）
+        this._doubleBtn = new Node('DoubleBtn');
+        this._doubleBtn.parent = panel;
+        this._doubleBtn.setPosition(0, -60, 0);
+        
+        const doubleBtnTransform = this._doubleBtn.addComponent(UITransform);
+        doubleBtnTransform.setContentSize(240, 50);
+        
+        const doubleBtnGraphics = this._doubleBtn.addComponent(Graphics);
+        doubleBtnGraphics.fillColor = new Color(255, 180, 0, 255);
+        doubleBtnGraphics.roundRect(-120, -25, 240, 50, 8);
+        doubleBtnGraphics.fill();
+        
+        const doubleBtnLabelNode = new Node('Label');
+        doubleBtnLabelNode.parent = this._doubleBtn;
+        this._doubleBtnLabel = doubleBtnLabelNode.addComponent(Label);
+        this._doubleBtnLabel.string = '看视频双倍 (模拟)';
+        this._doubleBtnLabel.fontSize = 22;
+        this._doubleBtnLabel.lineHeight = 28;
+        this._doubleBtnLabel.color = new Color(0, 0, 0, 255);
+        
         // 确认按钮
         this.confirmBtn = new Node('ConfirmBtn');
         this.confirmBtn.parent = panel;
-        this.confirmBtn.setPosition(0, -80, 0);
+        this.confirmBtn.setPosition(0, -120, 0);
         
         const btnTransform = this.confirmBtn.addComponent(UITransform);
         btnTransform.setContentSize(200, 50);
@@ -130,6 +168,9 @@ export class SettlePanel extends Component {
         if (this.confirmBtn) {
             this.confirmBtn.on(Node.EventType.TOUCH_END, this.onConfirmClick, this);
         }
+        if (this._doubleBtn) {
+            this._doubleBtn.on(Node.EventType.TOUCH_END, this.onDoubleClick, this);
+        }
     }
     
     /**
@@ -138,6 +179,11 @@ export class SettlePanel extends Component {
     showWin(waveCleared: number, totalWaves: number, scrapEarned: number, onConfirm: SettleCallback) {
         this._isWin = true;
         this._onConfirm = onConfirm;
+        
+        // 重置双倍状态（Day5）
+        this._doubleState = DoubleRewardState.Idle;
+        this._baseScrap = scrapEarned;
+        this._totalScrap = scrapEarned;
         
         if (this.panelRoot) {
             this.panelRoot.active = true;
@@ -156,10 +202,16 @@ export class SettlePanel extends Component {
             this.scrapLabel.string = `获得残骸: +${scrapEarned}`;
         }
         
+        // 显示双倍按钮（仅胜利）
+        this.updateDoubleButton();
+        
         // 更新边框颜色
         this.updatePanelBorder(new Color(100, 255, 100, 255));
         
-        console.log(`[SettlePanel] 显示胜利结算，残骸: ${scrapEarned}`);
+        // 发放基础残骸
+        GameData.addScrap(scrapEarned);
+        
+        console.log(`[SettlePanel] 显示胜利结算，基础残骸: ${scrapEarned}`);
     }
     
     /**
@@ -168,6 +220,11 @@ export class SettlePanel extends Component {
     showLose(waveReached: number, totalWaves: number, scrapEarned: number, onConfirm: SettleCallback) {
         this._isWin = false;
         this._onConfirm = onConfirm;
+        
+        // 失败不提供双倍（Day5）
+        this._doubleState = DoubleRewardState.Claimed;  // 直接置为已领取，禁用按钮
+        this._baseScrap = 0;
+        this._totalScrap = 0;
         
         if (this.panelRoot) {
             this.panelRoot.active = true;
@@ -188,6 +245,9 @@ export class SettlePanel extends Component {
             this.scrapLabel.string = `获得残骸: +${loseScrap}`;
             GameData.addScrap(loseScrap);
         }
+        
+        // 隐藏双倍按钮（失败不提供双倍入口）
+        this.updateDoubleButton();
         
         // 更新边框颜色
         this.updatePanelBorder(new Color(255, 100, 100, 255));
@@ -228,10 +288,126 @@ export class SettlePanel extends Component {
      * 确认按钮点击
      */
     private onConfirmClick() {
+        // 异步期间禁止确认
+        if (this._doubleState === DoubleRewardState.Watching) {
+            console.log('[SettlePanel] 广告进行中，请等待');
+            return;
+        }
+        
         console.log('[SettlePanel] 点击确认');
+        this.resetAndHide();
+    }
+    
+    /**
+     * 双倍按钮点击（Day5）
+     */
+    private onDoubleClick() {
+        if (this._doubleState !== DoubleRewardState.Idle) {
+            console.log('[SettlePanel] 双倍奖励不可用');
+            return;
+        }
+        
+        console.log('[SettlePanel] 开始模拟广告...');
+        this._doubleState = DoubleRewardState.Watching;
+        this.updateDoubleButton();
+        
+        // Mock 广告延迟 0.5-1s
+        const delay = 0.5 + Math.random() * 0.5;
+        this.scheduleOnce(() => {
+            this.onAdComplete(true);
+        }, delay);
+    }
+    
+    /**
+     * 广告完成回调
+     */
+    private onAdComplete(success: boolean) {
+        if (this._doubleState !== DoubleRewardState.Watching) {
+            console.log('[SettlePanel] 重复回调被忽略');
+            return;
+        }
+        
+        this._doubleState = DoubleRewardState.Claimed;
+        
+        if (success) {
+            // 额外发放等额残骸
+            GameData.addScrap(this._baseScrap);
+            this._totalScrap = this._baseScrap * 2;
+            
+            // 更新显示
+            if (this.scrapLabel) {
+                this.scrapLabel.string = `获得残骸: +${this._totalScrap} (已双倍)`;
+            }
+            
+            console.log(`[SettlePanel] 模拟广告成功，额外获得: +${this._baseScrap}，总计: ${this._totalScrap}`);
+        } else {
+            console.log('[SettlePanel] 模拟广告失败/取消');
+        }
+        
+        this.updateDoubleButton();
+    }
+    
+    /**
+     * 更新双倍按钮状态
+     */
+    private updateDoubleButton() {
+        if (!this._doubleBtn || !this._doubleBtnLabel) return;
+        
+        // 仅胜利时显示
+        this._doubleBtn.active = this._isWin;
+        
+        if (!this._isWin) return;
+        
+        const graphics = this._doubleBtn.getComponent(Graphics);
+        
+        switch (this._doubleState) {
+            case DoubleRewardState.Idle:
+                this._doubleBtnLabel.string = '看视频双倍 (模拟)';
+                if (graphics) {
+                    graphics.clear();
+                    graphics.fillColor = new Color(255, 180, 0, 255);
+                    graphics.roundRect(-120, -25, 240, 50, 8);
+                    graphics.fill();
+                }
+                break;
+                
+            case DoubleRewardState.Watching:
+                this._doubleBtnLabel.string = '加载中...';
+                if (graphics) {
+                    graphics.clear();
+                    graphics.fillColor = new Color(150, 150, 150, 255);
+                    graphics.roundRect(-120, -25, 240, 50, 8);
+                    graphics.fill();
+                }
+                break;
+                
+            case DoubleRewardState.Claimed:
+                this._doubleBtnLabel.string = '✓ 已领取双倍';
+                if (graphics) {
+                    graphics.clear();
+                    graphics.fillColor = new Color(100, 150, 100, 255);
+                    graphics.roundRect(-120, -25, 240, 50, 8);
+                    graphics.fill();
+                }
+                break;
+        }
+    }
+    
+    /**
+     * 重置状态并隐藏
+     */
+    private resetAndHide() {
+        // 取消未完成的定时器
+        this.unscheduleAllCallbacks();
+        
+        // 清理回调引用防止悬挂
+        const callback = this._onConfirm;
+        this._onConfirm = null;
+        
         this.hide();
-        if (this._onConfirm) {
-            this._onConfirm();
+        
+        if (callback) {
+            callback();
         }
     }
 }

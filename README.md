@@ -443,12 +443,133 @@ assets/scripts/core/BattleScene.ts   # 整合复活与结算面板
 
 ---
 
-## Day5+ 开发计划
+## Day5 完成内容
 
-### Day5 — 合成与教学
-- [ ] 部署窗拖拽同种 L1 合成 L2
-- [ ] 引导气泡（落子、合成各一次）
-- [ ] 胜负结算页
+### ✅ 同种合成 L1+L1→L2
+- 仅 DeployFast/DeployTune 阶段允许合成
+- 拖拽 L1 建筑到另一同种 L1 即可合成
+- 可合成目标高亮（黄色），激活目标高亮（绿色）
+- 合成后：源格释放、目标格显示 L2 外观
+- Combat 及其他阶段禁止合成，中途切状态安全取消
+- 无额外 DP 费用
+- L2 战斗数值正确读取（DPS、射程、AOE、地雷伤害等）
+
+### ✅ 引导气泡
+- 首次落子：进入 DeployFast 时显示
+- 首次战斗触摸：Combat 阶段首次触摸时显示
+- 首次可合成：放置第二个同种 L1 后显示
+- 3 秒自动消失，非阻塞，不抢触摸
+- localStorage 存储已显示标记，不重复弹
+
+### ✅ 胜利双倍奖励
+- 基础残骸 30，点击「看视频双倍 (模拟)」
+- Mock 广告延迟 0.5-1s
+- 成功后额外 +30，显示「已双倍」
+- 防重复入账：状态机 idle→watching→claimed
+- 异步期间禁止确认按钮
+- 失败结算不显示双倍入口
+
+### 新增文件
+```
+assets/scripts/ui/TutorialGuide.ts   # 引导气泡
+tests/day5.test.ts                   # 单元测试（vitest）
+tsconfig.test.json                   # 测试 TS 配置
+```
+
+### 修改文件
+```
+assets/scripts/battle/GridBuild.ts   # 拖拽合成、首次可合成事件
+assets/scripts/ui/SettlePanel.ts     # 双倍奖励状态机
+assets/scripts/core/BattleScene.ts   # 整合引导系统
+```
+
+---
+
+## Day5 验收步骤
+
+### 1. 合成功能
+
+1. 打开 `Battle.scene` 预览
+2. 放置两个机枪塔（同种 L1）
+3. 拖动其中一个到另一个上
+4. 观察：
+   - 可合成目标高亮为黄色
+   - 释放后合成为 L2（更深绿色、更大）
+   - 控制台输出 `[GridBuild] 合成成功: MachineGun 升级到 L2`
+
+### 2. 合成限制
+
+1. 尝试拖动 L2 建筑 → 无法启动拖拽
+2. 尝试拖动到不同种类 → 无高亮，释放后取消
+3. 进入 Combat 状态 → 拖拽自动取消
+
+### 3. L2 战斗数值
+
+1. 放置机枪 L1 + L1 → 合成 L2
+2. 开战后观察攻击伤害：
+   - L1 DPS=6, L2 DPS=14
+   - 控制台伤害日志应更高
+
+### 4. 引导气泡
+
+1. 重置引导（控制台运行 `TutorialGuide.resetAll()`）
+2. 进入 DeployFast → 显示「点击下方建筑按钮...」
+3. 放置两个同种 L1 → 显示「拖动同种 L1 建筑...」
+4. 进入 Combat 并触摸 → 显示「点击屏幕改变朝向...」
+5. 同关重开引导不再重复弹出
+
+### 5. 胜利双倍
+
+1. 通关 W5，显示胜利面板
+2. 点击「看视频双倍 (模拟)」
+3. 按钮变为「加载中...」
+4. 0.5-1 秒后显示「✓ 已领取双倍」
+5. 残骸显示「获得残骸: +60 (已双倍)」
+6. 再次点击按钮无效（已领取）
+7. 点击「返回大厅」正常退出
+
+### 6. 失败结算
+
+1. 故意失败（HP 归零）
+2. 放弃复活，进入失败结算
+3. 确认：无双倍按钮显示
+
+### 控制台日志示例
+```
+[BattleScene] Day5: 引导与合成系统已启用
+[TutorialGuide] 显示引导: first_place
+[GridBuild] 放置建筑: MachineGun 于 (0, 0), 消耗 2 DP
+[GridBuild] 放置建筑: MachineGun 于 (1, 0), 消耗 2 DP
+[GridBuild] 首次可合成
+[TutorialGuide] 显示引导: first_merge
+[GridBuild] 开始合成拖拽: MachineGun L1 from (1, 0)
+[GridBuild] 拖拽合成成功
+[GridBuild] 合成成功: MachineGun 升级到 L2
+...
+[SettlePanel] 显示胜利结算，基础残骸: 30
+[SettlePanel] 开始模拟广告...
+[SettlePanel] 模拟广告成功，额外获得: +30，总计: 60
+```
+
+---
+
+## Day5 单元测试
+
+运行测试：
+```bash
+npm install
+npx vitest run tests/day5.test.ts
+```
+
+测试覆盖：
+- 合成规则 (canMerge)：同种 L1+L1 可合成，L2 不可再合
+- 阶段锁定 (canDeployInState)：仅 DeployFast/DeployTune 允许
+- L2 数值读取：机枪 DPS=14, 炮轰 AOE=1.2, 地雷伤害=55
+- 双倍奖励状态机：防重复触发、防重复入账
+
+---
+
+## Day6+ 开发计划
 
 ### Day6 — 三线成长
 - [ ] Lobby 三线升级 UI + 费用表
@@ -488,7 +609,8 @@ GridBuild  Combat  EnemyWave
 | `Combat.ts` | 战斗系统：敌人移动、建筑开火、地雷触发、主角射击 |
 | `EnemyWave.ts` | 敌人波次生成器，双路径交替 |
 | `RevivePanel.ts` | 复活面板 UI，Mock 广告延迟 |
-| `SettlePanel.ts` | 结算面板 UI，胜利/失败显示 |
+| `SettlePanel.ts` | 结算面板 UI，胜利/失败显示，双倍奖励 |
+| `TutorialGuide.ts` | 引导气泡，首次落子/战斗/合成 |
 
 ### 本地存储
 
@@ -504,4 +626,4 @@ GridBuild  Combat  EnemyWave
 
 ---
 
-*Last updated: Day4 复活与结算版本*
+*Last updated: Day5 合成与引导版本*

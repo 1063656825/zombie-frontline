@@ -3,6 +3,7 @@
  * 格子建造系统
  * 管理可放置格子、拖拽落子、同型合成
  * Day2: 网格渲染、点击落子、战斗锁定
+ * Day5: 拖拽合成 L1+L1→L2
  */
 
 import { _decorator, Component, Node, Vec2, Vec3, EventTarget, Graphics, Color, UITransform, input, Input, EventTouch } from 'cc';
@@ -18,6 +19,7 @@ export const GridEvents = new EventTarget();
 export const EVENT_BUILDING_PLACED = 'building_placed';
 export const EVENT_BUILDING_MERGED = 'building_merged';
 export const EVENT_BUILDING_REMOVED = 'building_removed';
+export const EVENT_MERGE_AVAILABLE = 'merge_available';  // 首次可合成
 
 /**
  * 格子坐标
@@ -71,16 +73,26 @@ export class GridBuild extends Component {
     // 当前选中的建筑类型（由 BuildingPanel 设置）
     private _selectedBuildingType: BuildingType | null = null;
     
-    // 当前拖拽状态
+    // 当前拖拽状态（新放置）
     private _isDragging = false;
     private _dragBuildingType: BuildingType | null = null;
     private _dragNode: Node | null = null;
+    
+    // 合成拖拽状态（Day5）
+    private _isMergeDragging = false;
+    private _mergeDragSourcePos: GridPosition | null = null;
+    private _mergeDragPreviewNode: Node | null = null;
+    private _mergeDragTargetPos: GridPosition | null = null;
+    private _mergeHighlightCells: GridPosition[] = [];
     
     // 战斗状态引用（用于判断是否可操作）
     private _currentBattleState: BattleState = BattleState.None;
     
     // 高亮的格子
     private _highlightedCell: GridPosition | null = null;
+    
+    // 首次可合成事件是否已触发
+    private _mergeAvailableEmitted = false;
     
     /**
      * 初始化网格
@@ -196,34 +208,97 @@ export class GridBuild extends Component {
             this.GRID_ROWS * this.CELL_SIZE + 100
         );
         
+        this.node.on(Node.EventType.TOUCH_START, this.onTouchStart, this);
         this.node.on(Node.EventType.TOUCH_END, this.onTouchEnd, this);
         this.node.on(Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
+        this.node.on(Node.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
+    }
+    
+    /**
+     * 触摸开始（检测合成拖拽）
+     */
+    private onTouchStart(event: EventTouch) {
+        if (!this.canDeploy) return;
+        
+        const touchPos = event.getUILocation();
+        const localPos = this.node.getComponent(UITransform)?.convertToNodeSpaceAR(new Vec3(touchPos.x, touchPos.y, 0));
+        if (!localPos) return;
+        
+        const gridPos = this.worldToGrid(localPos);
+        if (!gridPos) return;
+        
+        const cell = this.getCell(gridPos);
+        if (!cell?.building) return;
+        
+        // 检测是否点击了 L1 建筑（可作为合成源）
+        if (cell.building.level === BuildingLevel.L1) {
+            this._isMergeDragging = true;
+            this._mergeDragSourcePos = gridPos;
+            this._mergeDragTargetPos = null;
+            
+            // 创建拖拽预览节点
+            this.createMergeDragPreview(cell.building, localPos);
+            
+            // 计算并高亮可合成目标
+            this.updateMergeHighlights();
+            
+            console.log(`[GridBuild] 开始合成拖拽: ${cell.building.type} L1 from (${gridPos.row}, ${gridPos.col})`);
+        }
+    }
+    
+    /**
+     * 触摸取消
+     */
+    private onTouchCancel(event: EventTouch) {
+        this.cancelMergeDrag();
     }
     
     /**
      * 触摸移动（高亮预览）
      */
     private onTouchMove(event: EventTouch) {
-        if (!this.canDeploy || !this._selectedBuildingType) return;
+        if (!this.canDeploy) return;
         
         const touchPos = event.getUILocation();
         const localPos = this.node.getComponent(UITransform)?.convertToNodeSpaceAR(new Vec3(touchPos.x, touchPos.y, 0));
+        if (!localPos) return;
         
-        if (localPos) {
-            const gridPos = this.worldToGrid(localPos);
-            if (gridPos && (!this._highlightedCell || 
-                this._highlightedCell.row !== gridPos.row || 
-                this._highlightedCell.col !== gridPos.col)) {
-                this._highlightedCell = gridPos;
-                this.updateGridHighlight();
+        // 合成拖拽中
+        if (this._isMergeDragging && this._mergeDragSourcePos) {
+            // 更新预览节点位置
+            if (this._mergeDragPreviewNode) {
+                this._mergeDragPreviewNode.setPosition(localPos);
             }
+            
+            // 检测目标格
+            const gridPos = this.worldToGrid(localPos);
+            this._mergeDragTargetPos = gridPos;
+            this.updateMergeHighlights();
+            return;
+        }
+        
+        // 普通放置高亮
+        if (!this._selectedBuildingType) return;
+        
+        const gridPos = this.worldToGrid(localPos);
+        if (gridPos && (!this._highlightedCell || 
+            this._highlightedCell.row !== gridPos.row || 
+            this._highlightedCell.col !== gridPos.col)) {
+            this._highlightedCell = gridPos;
+            this.updateGridHighlight();
         }
     }
     
     /**
-     * 触摸结束（放置建筑）
+     * 触摸结束（放置建筑或确认合成）
      */
     private onTouchEnd(event: EventTouch) {
+        // 合成拖拽结束
+        if (this._isMergeDragging && this._mergeDragSourcePos) {
+            this.finishMergeDrag();
+            return;
+        }
+        
         if (!this.canDeploy) {
             console.log('[GridBuild] 非部署阶段，无法放置');
             return;
@@ -305,7 +380,14 @@ export class GridBuild extends Component {
      * 更新战斗状态
      */
     setBattleState(state: BattleState) {
+        const wasDeploying = this.canDeploy;
         this._currentBattleState = state;
+        
+        // 状态切换时安全取消拖拽
+        if (wasDeploying && !this.canDeploy) {
+            this.cancelMergeDrag();
+            console.log('[GridBuild] 状态切换，取消拖拽');
+        }
     }
     
     /**
@@ -357,6 +439,9 @@ export class GridBuild extends Component {
         console.log(`[GridBuild] 放置建筑: ${type} 于 (${gridPos.row}, ${gridPos.col}), 消耗 ${config.dpCost} DP`);
         GridEvents.emit(EVENT_BUILDING_PLACED, building);
         
+        // 检查是否触发首次可合成
+        this.checkAndEmitMergeAvailable();
+        
         return true;
     }
     
@@ -402,10 +487,221 @@ export class GridBuild extends Component {
         this.removeBuilding(sourcePos);
         targetBuilding.level = BuildingLevel.L2;
         
+        // 更新目标建筑节点外观为 L2
+        this.updateBuildingNodeAppearance(targetBuilding, targetCell.worldPos);
+        
         console.log(`[GridBuild] 合成成功: ${targetBuilding.type} 升级到 L2`);
         GridEvents.emit(EVENT_BUILDING_MERGED, targetBuilding);
         
         return true;
+    }
+    
+    /**
+     * 更新建筑节点外观（用于合成后）
+     */
+    private updateBuildingNodeAppearance(building: PlacedBuilding, worldPos: Vec3) {
+        // 销毁旧节点
+        if (building.node) {
+            building.node.destroy();
+        }
+        
+        // 创建新的 L2 外观节点
+        const container = this._buildingContainer || this.node;
+        const newNode = PlaceholderGraphics.createBuilding(container, building.type, building.level);
+        newNode.setPosition(worldPos);
+        building.node = newNode;
+    }
+    
+    /**
+     * 创建合成拖拽预览节点
+     */
+    private createMergeDragPreview(building: PlacedBuilding, pos: Vec3) {
+        if (this._mergeDragPreviewNode) {
+            this._mergeDragPreviewNode.destroy();
+        }
+        
+        const container = this._buildingContainer || this.node;
+        this._mergeDragPreviewNode = PlaceholderGraphics.createBuilding(
+            container, 
+            building.type, 
+            building.level
+        );
+        this._mergeDragPreviewNode.setPosition(pos);
+        
+        // 半透明效果
+        const graphics = this._mergeDragPreviewNode.getComponent(Graphics);
+        if (graphics) {
+            graphics.fillColor = new Color(graphics.fillColor.r, graphics.fillColor.g, graphics.fillColor.b, 150);
+        }
+    }
+    
+    /**
+     * 更新合成目标高亮
+     */
+    private updateMergeHighlights() {
+        if (!this._mergeDragSourcePos) return;
+        
+        const sourceCell = this.getCell(this._mergeDragSourcePos);
+        if (!sourceCell?.building) return;
+        
+        // 找出所有可合成目标
+        this._mergeHighlightCells = [];
+        
+        for (let row = 0; row < this.GRID_ROWS; row++) {
+            for (let col = 0; col < this.GRID_COLS; col++) {
+                if (row === this._mergeDragSourcePos.row && col === this._mergeDragSourcePos.col) continue;
+                
+                const cell = this._grid[row][col];
+                if (!cell.building) continue;
+                
+                const srcConfig = getBuildingConfig(sourceCell.building.type, sourceCell.building.level);
+                const tgtConfig = getBuildingConfig(cell.building.type, cell.building.level);
+                
+                if (srcConfig && tgtConfig && canMerge(srcConfig, tgtConfig)) {
+                    this._mergeHighlightCells.push({ row, col });
+                }
+            }
+        }
+        
+        // 重绘网格
+        this.renderGridWithMergeHighlights();
+    }
+    
+    /**
+     * 绘制带合成高亮的网格
+     */
+    private renderGridWithMergeHighlights() {
+        if (!this._gridGraphics) return;
+        
+        this._gridGraphics.clear();
+        
+        for (let row = 0; row < this.GRID_ROWS; row++) {
+            for (let col = 0; col < this.GRID_COLS; col++) {
+                const cell = this._grid[row][col];
+                const isMergeTarget = this._mergeHighlightCells.some(
+                    p => p.row === row && p.col === col
+                );
+                const isCurrentTarget = this._mergeDragTargetPos && 
+                    this._mergeDragTargetPos.row === row && 
+                    this._mergeDragTargetPos.col === col;
+                
+                this.drawCellWithMergeState(cell, isMergeTarget, isCurrentTarget && isMergeTarget);
+            }
+        }
+    }
+    
+    /**
+     * 绘制带合成状态的格子
+     */
+    private drawCellWithMergeState(cell: GridCell, isMergeTarget: boolean, isActive: boolean) {
+        if (!this._gridGraphics) return;
+        
+        const x = cell.worldPos.x - this.CELL_SIZE / 2;
+        const y = cell.worldPos.y - this.CELL_SIZE / 2;
+        const padding = 2;
+        
+        let fillColor: Color;
+        if (isActive) {
+            fillColor = new Color(100, 255, 100, 180);  // 激活的合成目标
+        } else if (isMergeTarget) {
+            fillColor = new Color(255, 255, 100, 120);  // 可合成目标
+        } else if (cell.isValid) {
+            fillColor = cell.isOccupied 
+                ? new Color(80, 80, 80, 60) 
+                : PLACEHOLDER_COLORS.GRID_VALID;
+        } else {
+            fillColor = PLACEHOLDER_COLORS.GRID_INVALID;
+        }
+        
+        this._gridGraphics.fillColor = fillColor;
+        this._gridGraphics.rect(x + padding, y + padding, this.CELL_SIZE - padding * 2, this.CELL_SIZE - padding * 2);
+        this._gridGraphics.fill();
+        
+        this._gridGraphics.strokeColor = isActive 
+            ? new Color(100, 255, 100, 255)
+            : isMergeTarget 
+                ? new Color(255, 255, 100, 255) 
+                : new Color(255, 255, 255, 80);
+        this._gridGraphics.lineWidth = isActive ? 3 : isMergeTarget ? 2 : 1;
+        this._gridGraphics.rect(x, y, this.CELL_SIZE, this.CELL_SIZE);
+        this._gridGraphics.stroke();
+    }
+    
+    /**
+     * 完成合成拖拽
+     */
+    private finishMergeDrag() {
+        if (!this._mergeDragSourcePos || !this._mergeDragTargetPos) {
+            this.cancelMergeDrag();
+            return;
+        }
+        
+        // 检查目标是否为有效合成目标
+        const isValidTarget = this._mergeHighlightCells.some(
+            p => p.row === this._mergeDragTargetPos!.row && p.col === this._mergeDragTargetPos!.col
+        );
+        
+        if (isValidTarget) {
+            const success = this.tryMergeBuildings(this._mergeDragSourcePos, this._mergeDragTargetPos);
+            if (success) {
+                console.log('[GridBuild] 拖拽合成成功');
+            }
+        } else {
+            console.log('[GridBuild] 拖拽合成取消：无效目标');
+        }
+        
+        this.cancelMergeDrag();
+    }
+    
+    /**
+     * 取消合成拖拽（安全清理）
+     */
+    cancelMergeDrag() {
+        this._isMergeDragging = false;
+        this._mergeDragSourcePos = null;
+        this._mergeDragTargetPos = null;
+        this._mergeHighlightCells = [];
+        
+        if (this._mergeDragPreviewNode) {
+            this._mergeDragPreviewNode.destroy();
+            this._mergeDragPreviewNode = null;
+        }
+        
+        // 恢复正常网格渲染
+        this.renderGrid();
+    }
+    
+    /**
+     * 检查是否有可合成的建筑对
+     */
+    checkMergeAvailable(): boolean {
+        const buildings = this.getAllBuildings();
+        const l1Buildings = buildings.filter(b => b.level === BuildingLevel.L1);
+        
+        // 按类型分组检查
+        const typeCount: Record<string, number> = {};
+        for (const b of l1Buildings) {
+            typeCount[b.type] = (typeCount[b.type] || 0) + 1;
+        }
+        
+        // 任意类型有 >= 2 个 L1 即可合成
+        for (const count of Object.values(typeCount)) {
+            if (count >= 2) return true;
+        }
+        return false;
+    }
+    
+    /**
+     * 检查并触发首次可合成事件
+     */
+    private checkAndEmitMergeAvailable() {
+        if (this._mergeAvailableEmitted) return;
+        
+        if (this.checkMergeAvailable()) {
+            this._mergeAvailableEmitted = true;
+            GridEvents.emit(EVENT_MERGE_AVAILABLE);
+            console.log('[GridBuild] 首次可合成');
+        }
     }
     
     /**

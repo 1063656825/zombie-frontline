@@ -8,12 +8,13 @@
 import { _decorator, Component, Label, Node, director, Button, Color, Sprite, UITransform, Graphics, Vec3, EventTouch } from 'cc';
 import { GameData, GameEvents, EVENT_HP_CHANGED, EVENT_DP_CHANGED } from '../data/GameData';
 import { BattleFlow, BattleState, BattleEvents, EVENT_STATE_CHANGED, EVENT_WAVE_START, EVENT_WAVE_CLEAR, EVENT_BATTLE_WIN, EVENT_BATTLE_LOSE, EVENT_SHOW_REVIVE } from '../battle/BattleFlow';
-import { GridBuild, GridEvents, EVENT_BUILDING_PLACED } from '../battle/GridBuild';
+import { GridBuild, GridEvents, EVENT_BUILDING_PLACED, EVENT_BUILDING_MERGED, EVENT_MERGE_AVAILABLE } from '../battle/GridBuild';
 import { BuildingPanel, BuildingPanelEvents, EVENT_BUILDING_SELECTED, EVENT_BUILDING_DESELECTED } from '../ui/BuildingPanel';
 import { Combat, CombatEvents, EVENT_ENEMY_KILLED, EVENT_BASE_DAMAGED, EVENT_MINE_TRIGGERED } from '../battle/Combat';
 import { EnemyWave } from '../battle/EnemyWave';
 import { RevivePanel } from '../ui/RevivePanel';
 import { SettlePanel } from '../ui/SettlePanel';
+import { TutorialGuide, TutorialType } from '../ui/TutorialGuide';
 import { BuildingType, BUILDING_NAMES } from '../battle/BuildingConfig';
 import { SCENE_LOBBY } from './SceneManager';
 
@@ -71,9 +72,13 @@ export class BattleScene extends Component {
     // UI 面板
     private _revivePanel: RevivePanel | null = null;
     private _settlePanel: SettlePanel | null = null;
+    private _tutorialGuide: TutorialGuide | null = null;
     
     // 主角朝向指示器
     private _aimIndicator: Node | null = null;
+    
+    // 首次战斗触摸标记（用于显示引导）
+    private _firstCombatTouchShown = false;
     
     // 本局获得的残骸（胜利时发放）
     private readonly BASE_SCRAP_REWARD = 30;
@@ -115,7 +120,7 @@ export class BattleScene extends Component {
         // 创建朝向指示器
         this.createAimIndicator();
         
-        console.log('[BattleScene] Day4: 复活与结算系统已启用');
+        console.log('[BattleScene] Day5: 合成与引导系统已启用');
     }
     
     onDestroy() {
@@ -137,6 +142,12 @@ export class BattleScene extends Component {
         settleNode.parent = this.node;
         settleNode.setPosition(0, 0, 0);
         this._settlePanel = settleNode.addComponent(SettlePanel);
+        
+        // 引导气泡（Day5）
+        const tutorialNode = new Node('TutorialGuide');
+        tutorialNode.parent = this.node;
+        tutorialNode.setPosition(0, 0, 0);
+        this._tutorialGuide = tutorialNode.addComponent(TutorialGuide);
     }
     
     private setupEventListeners() {
@@ -154,6 +165,8 @@ export class BattleScene extends Component {
         
         // 网格事件
         GridEvents.on(EVENT_BUILDING_PLACED, this.onBuildingPlaced, this);
+        GridEvents.on(EVENT_BUILDING_MERGED, this.onBuildingMerged, this);
+        GridEvents.on(EVENT_MERGE_AVAILABLE, this.onMergeAvailable, this);
         
         // 战斗事件
         CombatEvents.on(EVENT_MINE_TRIGGERED, this.onMineTriggered, this);
@@ -171,6 +184,8 @@ export class BattleScene extends Component {
         BuildingPanelEvents.off(EVENT_BUILDING_DESELECTED, this.onBuildingDeselected, this);
         
         GridEvents.off(EVENT_BUILDING_PLACED, this.onBuildingPlaced, this);
+        GridEvents.off(EVENT_BUILDING_MERGED, this.onBuildingMerged, this);
+        GridEvents.off(EVENT_MERGE_AVAILABLE, this.onMergeAvailable, this);
         CombatEvents.off(EVENT_MINE_TRIGGERED, this.onMineTriggered, this);
     }
     
@@ -204,6 +219,12 @@ export class BattleScene extends Component {
         }
         
         if (!this.combat) return;
+        
+        // Day5 引导：首次战斗触摸
+        if (!this._firstCombatTouchShown && this._tutorialGuide) {
+            this._firstCombatTouchShown = true;
+            this._tutorialGuide.show(TutorialType.CombatAim);
+        }
         
         const touchPos = event.getUILocation();
         const touchArea = this.combatTouchArea || this.node;
@@ -290,6 +311,26 @@ export class BattleScene extends Component {
         
         if (this.buildingPanel) {
             this.buildingPanel.updateAllButtons();
+        }
+    }
+    
+    /**
+     * 建筑合成成功回调（Day5）
+     */
+    private onBuildingMerged(building: any) {
+        console.log(`[BattleScene] 建筑合成成功: ${building.type} → L${building.level}`);
+        
+        if (this.buildingPanel) {
+            this.buildingPanel.updateAllButtons();
+        }
+    }
+    
+    /**
+     * 首次可合成回调（Day5）
+     */
+    private onMergeAvailable() {
+        if (this._tutorialGuide) {
+            this._tutorialGuide.show(TutorialType.FirstMerge);
         }
     }
     
@@ -446,6 +487,11 @@ export class BattleScene extends Component {
             if (this.gridBuild) {
                 this.gridBuild.setSelectedBuildingType(null);
             }
+        }
+        
+        // Day5 引导：首次落子
+        if (newState === BattleState.DeployFast && this._tutorialGuide) {
+            this._tutorialGuide.show(TutorialType.FirstPlace);
         }
         
         this.updateTutorial(newState);

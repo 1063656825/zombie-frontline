@@ -5,12 +5,21 @@
   "version": "1.0.0",
   "description": "竖屏轻塔防微信小游戏 - 波间落子 + 波内自动割草",
   "author": "Developer",
-  "main": "",
+  "main": "index.js",
   "type": "3d",
   "creator": {
     "version": "3.8.0"
   },
   "scripts": {},
-  "dependencies": {},
-  "devDependencies": {}
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://origin.cursor.com/git/hugeqi/tmp-08b5801bf0c82a27.git"
+  },
+  "keywords": [],
+  "license": "ISC"
 }
