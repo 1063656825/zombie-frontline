@@ -21,6 +21,8 @@ import { BuildingType, BUILDING_NAMES } from '../battle/BuildingConfig';
 import { SCENE_LOBBY } from './SceneManager';
 import { screenShake, screenFlashRed } from '../effects/HitEffects';
 import { initWxBridge } from '../platform/WxBridge';
+import { DeployPhaseIndicator } from '../ui/DeployPhaseIndicator';
+import { DangerSideIndicator, EnemyPosition } from '../ui/DangerSideIndicator';
 
 const { ccclass, property } = _decorator;
 
@@ -79,6 +81,12 @@ export class BattleScene extends Component {
     private _tutorialGuide: TutorialGuide | null = null;
     private _supplyButton: SupplyButton | null = null;
     
+    // Day11: 部署节奏指示器
+    private _deployPhaseIndicator: DeployPhaseIndicator | null = null;
+    
+    // Day11: 危险侧指示器
+    private _dangerSideIndicator: DangerSideIndicator | null = null;
+    
     // 主角朝向指示器
     private _aimIndicator: Node | null = null;
     
@@ -136,6 +144,33 @@ export class BattleScene extends Component {
     }
     
     /**
+     * Day11: 每帧更新 UI 指示器
+     */
+    update(dt: number) {
+        // 更新部署节奏指示器
+        if (this._deployPhaseIndicator && this.battleFlow) {
+            const state = this.battleFlow.state;
+            if (state === BattleState.DeployFast || state === BattleState.DeployTune) {
+                const maxTime = state === BattleState.DeployFast ? 8 : 4;
+                this._deployPhaseIndicator.setPhase(state, this.battleFlow.timer, maxTime);
+            }
+        }
+        
+        // 更新危险侧指示器（战斗阶段）
+        if (this._dangerSideIndicator && this.combat && this.battleFlow) {
+            const state = this.battleFlow.state;
+            if (state === BattleState.Combat) {
+                const enemies = this.combat.getAllEnemies();
+                const positions: EnemyPosition[] = enemies.map(e => ({
+                    x: e.position.x,
+                    y: e.position.y
+                }));
+                this._dangerSideIndicator.updateDanger(positions);
+            }
+        }
+    }
+    
+    /**
      * 创建 UI 面板
      */
     private createUIPanels() {
@@ -167,6 +202,18 @@ export class BattleScene extends Component {
                 this.buildingPanel.updateAllButtons();
             }
         });
+        
+        // Day11: 部署节奏指示器（屏幕上方）
+        const deployPhaseNode = new Node('DeployPhaseIndicator');
+        deployPhaseNode.parent = this.node;
+        deployPhaseNode.setPosition(0, 500, 0);
+        this._deployPhaseIndicator = deployPhaseNode.addComponent(DeployPhaseIndicator);
+        
+        // Day11: 危险侧指示器
+        const dangerNode = new Node('DangerSideIndicator');
+        dangerNode.parent = this.node;
+        dangerNode.setPosition(0, -100, 0);
+        this._dangerSideIndicator = dangerNode.addComponent(DangerSideIndicator);
     }
     
     private setupEventListeners() {
@@ -504,6 +551,23 @@ export class BattleScene extends Component {
         // Day7: 更新补给按钮状态
         if (this._supplyButton) {
             this._supplyButton.setBattleState(newState);
+        }
+        
+        // Day11: 更新部署节奏指示器
+        if (this._deployPhaseIndicator) {
+            if (newState === BattleState.DeployFast || newState === BattleState.DeployTune) {
+                const maxTime = newState === BattleState.DeployFast ? 8 : 4;
+                this._deployPhaseIndicator.setPhase(newState, this.battleFlow?.timer || 0, maxTime);
+            } else {
+                this._deployPhaseIndicator.hide();
+            }
+        }
+        
+        // Day11: 危险侧指示器（战斗阶段显示，结算时隐藏）
+        if (this._dangerSideIndicator) {
+            if (newState === BattleState.Settle || newState === BattleState.RevivePrompt) {
+                this._dangerSideIndicator.hide();
+            }
         }
         
         const isDeployPhase = newState === BattleState.DeployFast || newState === BattleState.DeployTune;
