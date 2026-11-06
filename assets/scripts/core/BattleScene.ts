@@ -2,16 +2,18 @@
  * BattleScene.ts
  * 战斗场景控制器
  * 整合 BattleFlow、GridBuild、BuildingPanel、Combat、EnemyWave 系统
- * Day3: 敌人移动、建筑开火、地雷触发、点屏转向
+ * Day4: 复活面板、结算面板、胜负判定
  */
 
 import { _decorator, Component, Label, Node, director, Button, Color, Sprite, UITransform, Graphics, Vec3, EventTouch } from 'cc';
 import { GameData, GameEvents, EVENT_HP_CHANGED, EVENT_DP_CHANGED } from '../data/GameData';
-import { BattleFlow, BattleState, BattleEvents, EVENT_STATE_CHANGED, EVENT_WAVE_START, EVENT_WAVE_CLEAR, EVENT_BATTLE_WIN, EVENT_BATTLE_LOSE } from '../battle/BattleFlow';
+import { BattleFlow, BattleState, BattleEvents, EVENT_STATE_CHANGED, EVENT_WAVE_START, EVENT_WAVE_CLEAR, EVENT_BATTLE_WIN, EVENT_BATTLE_LOSE, EVENT_SHOW_REVIVE } from '../battle/BattleFlow';
 import { GridBuild, GridEvents, EVENT_BUILDING_PLACED } from '../battle/GridBuild';
 import { BuildingPanel, BuildingPanelEvents, EVENT_BUILDING_SELECTED, EVENT_BUILDING_DESELECTED } from '../ui/BuildingPanel';
 import { Combat, CombatEvents, EVENT_ENEMY_KILLED, EVENT_BASE_DAMAGED, EVENT_MINE_TRIGGERED } from '../battle/Combat';
 import { EnemyWave } from '../battle/EnemyWave';
+import { RevivePanel } from '../ui/RevivePanel';
+import { SettlePanel } from '../ui/SettlePanel';
 import { BuildingType, BUILDING_NAMES } from '../battle/BuildingConfig';
 import { SCENE_LOBBY } from './SceneManager';
 
@@ -52,22 +54,29 @@ export class BattleScene extends Component {
     
     // 占位节点
     @property(Node)
-    baseNode: Node | null = null;  // 据点
+    baseNode: Node | null = null;
     
     @property(Node)
-    buildingContainer: Node | null = null;  // 建筑容器
+    buildingContainer: Node | null = null;
     
     @property(Node)
-    enemyContainer: Node | null = null;  // 敌人容器
+    enemyContainer: Node | null = null;
     
     @property(Node)
-    gridNode: Node | null = null;  // 网格节点
+    gridNode: Node | null = null;
     
     @property(Node)
-    combatTouchArea: Node | null = null;  // 战斗触摸区域（点屏转向）
+    combatTouchArea: Node | null = null;
+    
+    // UI 面板
+    private _revivePanel: RevivePanel | null = null;
+    private _settlePanel: SettlePanel | null = null;
     
     // 主角朝向指示器
     private _aimIndicator: Node | null = null;
+    
+    // 本局获得的残骸（胜利时发放）
+    private readonly BASE_SCRAP_REWARD = 30;
     
     start() {
         console.log('[BattleScene] 战斗场景开始');
@@ -75,8 +84,9 @@ export class BattleScene extends Component {
         this.setupEventListeners();
         this.setupButtons();
         this.setupCombatTouch();
+        this.createUIPanels();
         
-        // 初始化网格（传入建筑容器）
+        // 初始化网格
         if (this.gridBuild) {
             this.gridBuild.initGrid(this.buildingContainer || undefined);
         }
@@ -86,7 +96,6 @@ export class BattleScene extends Component {
             this.combat.gridBuild = this.gridBuild;
             this.combat.enemyContainer = this.enemyContainer;
             
-            // 设置击杀回调
             this.combat.setOnEnemyKilledCallback(() => {
                 if (this.battleFlow) {
                     this.battleFlow.onEnemyKilled();
@@ -106,11 +115,28 @@ export class BattleScene extends Component {
         // 创建朝向指示器
         this.createAimIndicator();
         
-        console.log('[BattleScene] Day3: 战斗系统已启用');
+        console.log('[BattleScene] Day4: 复活与结算系统已启用');
     }
     
     onDestroy() {
         this.removeEventListeners();
+    }
+    
+    /**
+     * 创建 UI 面板
+     */
+    private createUIPanels() {
+        // 复活面板
+        const reviveNode = new Node('RevivePanel');
+        reviveNode.parent = this.node;
+        reviveNode.setPosition(0, 0, 0);
+        this._revivePanel = reviveNode.addComponent(RevivePanel);
+        
+        // 结算面板
+        const settleNode = new Node('SettlePanel');
+        settleNode.parent = this.node;
+        settleNode.setPosition(0, 0, 0);
+        this._settlePanel = settleNode.addComponent(SettlePanel);
     }
     
     private setupEventListeners() {
@@ -120,6 +146,7 @@ export class BattleScene extends Component {
         BattleEvents.on(EVENT_WAVE_CLEAR, this.onWaveClear, this);
         BattleEvents.on(EVENT_BATTLE_WIN, this.onBattleWin, this);
         BattleEvents.on(EVENT_BATTLE_LOSE, this.onBattleLose, this);
+        BattleEvents.on(EVENT_SHOW_REVIVE, this.onShowRevive, this);
         
         // 建筑面板事件
         BuildingPanelEvents.on(EVENT_BUILDING_SELECTED, this.onBuildingSelected, this);
@@ -138,6 +165,7 @@ export class BattleScene extends Component {
         BattleEvents.off(EVENT_WAVE_CLEAR, this.onWaveClear, this);
         BattleEvents.off(EVENT_BATTLE_WIN, this.onBattleWin, this);
         BattleEvents.off(EVENT_BATTLE_LOSE, this.onBattleLose, this);
+        BattleEvents.off(EVENT_SHOW_REVIVE, this.onShowRevive, this);
         
         BuildingPanelEvents.off(EVENT_BUILDING_SELECTED, this.onBuildingSelected, this);
         BuildingPanelEvents.off(EVENT_BUILDING_DESELECTED, this.onBuildingDeselected, this);
@@ -150,10 +178,8 @@ export class BattleScene extends Component {
      * 设置战斗触摸（点屏转向）
      */
     private setupCombatTouch() {
-        // 使用整个屏幕区域或指定区域
         const touchArea = this.combatTouchArea || this.node;
         
-        // 确保有 UITransform
         let transform = touchArea.getComponent(UITransform);
         if (!transform) {
             transform = touchArea.addComponent(UITransform);
@@ -164,25 +190,15 @@ export class BattleScene extends Component {
         touchArea.on(Node.EventType.TOUCH_MOVE, this.onCombatTouchMove, this);
     }
     
-    /**
-     * 战斗触摸开始
-     */
     private onCombatTouchStart(event: EventTouch) {
         this.handleCombatTouch(event);
     }
     
-    /**
-     * 战斗触摸移动
-     */
     private onCombatTouchMove(event: EventTouch) {
         this.handleCombatTouch(event);
     }
     
-    /**
-     * 处理战斗触摸（点屏转向）
-     */
     private handleCombatTouch(event: EventTouch) {
-        // 只在 Combat 状态处理
         if (!this.battleFlow || this.battleFlow.state !== BattleState.Combat) {
             return;
         }
@@ -195,37 +211,25 @@ export class BattleScene extends Component {
         
         if (!transform) return;
         
-        // 转换为本地坐标
         const localPos = transform.convertToNodeSpaceAR(new Vec3(touchPos.x, touchPos.y, 0));
         
-        // 设置主角朝向
         this.combat.aimAtPosition(localPos);
-        
-        // 更新朝向指示器
         this.updateAimIndicator(localPos);
     }
     
-    /**
-     * 创建朝向指示器
-     */
     private createAimIndicator() {
         this._aimIndicator = new Node('AimIndicator');
         this._aimIndicator.parent = this.node;
-        this._aimIndicator.setPosition(0, -450, 0);  // 据点位置
+        this._aimIndicator.setPosition(0, -450, 0);
         
         const graphics = this._aimIndicator.addComponent(Graphics);
         graphics.strokeColor = new Color(255, 255, 100, 150);
         graphics.lineWidth = 3;
         
-        // 初始绘制向上的线
         this.drawAimLine(graphics, new Vec3(0, 1, 0));
-        
         this._aimIndicator.active = false;
     }
     
-    /**
-     * 绘制瞄准线
-     */
     private drawAimLine(graphics: Graphics, direction: Vec3) {
         graphics.clear();
         
@@ -233,12 +237,10 @@ export class BattleScene extends Component {
         const endX = direction.x * length;
         const endY = direction.y * length;
         
-        // 画主线
         graphics.moveTo(0, 0);
         graphics.lineTo(endX, endY);
         graphics.stroke();
         
-        // 画扇形指示
         const angle = 30 * Math.PI / 180;
         const cos = Math.cos(angle);
         const sin = Math.sin(angle);
@@ -255,9 +257,6 @@ export class BattleScene extends Component {
         graphics.stroke();
     }
     
-    /**
-     * 更新朝向指示器
-     */
     private updateAimIndicator(targetPos: Vec3) {
         if (!this._aimIndicator) return;
         
@@ -272,9 +271,6 @@ export class BattleScene extends Component {
         }
     }
     
-    /**
-     * 建筑选中回调
-     */
     private onBuildingSelected(type: BuildingType) {
         console.log(`[BattleScene] 选中建筑: ${BUILDING_NAMES[type]}`);
         if (this.gridBuild) {
@@ -282,9 +278,6 @@ export class BattleScene extends Component {
         }
     }
     
-    /**
-     * 建筑取消选中回调
-     */
     private onBuildingDeselected() {
         console.log('[BattleScene] 取消选中建筑');
         if (this.gridBuild) {
@@ -292,21 +285,14 @@ export class BattleScene extends Component {
         }
     }
     
-    /**
-     * 建筑放置成功回调
-     */
     private onBuildingPlaced(building: any) {
         console.log(`[BattleScene] 建筑放置成功: ${building.type}`);
         
-        // 更新建筑面板按钮状态
         if (this.buildingPanel) {
             this.buildingPanel.updateAllButtons();
         }
     }
     
-    /**
-     * 地雷触发回调
-     */
     private onMineTriggered(building: any, enemies: any[]) {
         console.log(`[BattleScene] 地雷爆炸！影响 ${enemies.length} 个敌人`);
     }
@@ -325,20 +311,13 @@ export class BattleScene extends Component {
         }
     }
     
-    /**
-     * 创建占位美术（使用 Graphics 绘制色块）
-     */
     private createPlaceholderGraphics() {
-        // 据点占位（底部蓝色方块）
         if (this.baseNode) {
             this.drawColorBlock(this.baseNode, new Color(33, 150, 243, 255), 200, 40);
             console.log('[BattleScene] 创建据点占位');
         }
     }
     
-    /**
-     * 绘制纯色方块
-     */
     private drawColorBlock(node: Node, color: Color, width: number, height: number) {
         let graphics = node.getComponent(Graphics);
         if (!graphics) {
@@ -356,6 +335,11 @@ export class BattleScene extends Component {
      */
     private onWaveStart(waveIndex: number) {
         console.log(`[BattleScene] 波次 ${waveIndex} 开始`);
+        
+        // 复活时需要清除现有敌人
+        if (this.combat) {
+            this.combat.clearAll();
+        }
         
         // 启动敌人生成
         if (this.enemyWave) {
@@ -376,24 +360,65 @@ export class BattleScene extends Component {
     private onWaveClear(waveIndex: number) {
         console.log(`[BattleScene] 波次 ${waveIndex} 清除`);
         
-        // 停止敌人生成
         if (this.enemyWave) {
             this.enemyWave.stopWave();
         }
         
-        // 停用战斗系统
         if (this.combat) {
             this.combat.setActive(false);
         }
     }
     
-    /**
-     * 更新敌人数量显示
-     */
     private updateEnemyCount() {
         if (this.enemyCountLabel && this.combat) {
             const count = this.combat.getAliveEnemyCount();
             this.enemyCountLabel.string = `敌人: ${count}`;
+        }
+    }
+    
+    /**
+     * 显示复活面板
+     */
+    private onShowRevive(canRevive: boolean) {
+        console.log(`[BattleScene] 显示复活面板，可复活: ${canRevive}`);
+        
+        // 停止战斗
+        if (this.combat) {
+            this.combat.setActive(false);
+        }
+        if (this.enemyWave) {
+            this.enemyWave.stopWave();
+        }
+        
+        // 显示复活面板
+        if (this._revivePanel) {
+            this._revivePanel.show(
+                canRevive,
+                () => this.onReviveConfirm(),
+                () => this.onReviveGiveUp()
+            );
+        }
+    }
+    
+    /**
+     * 确认复活
+     */
+    private onReviveConfirm() {
+        console.log('[BattleScene] 执行复活');
+        
+        if (this.battleFlow) {
+            this.battleFlow.revive();
+        }
+    }
+    
+    /**
+     * 放弃复活
+     */
+    private onReviveGiveUp() {
+        console.log('[BattleScene] 放弃复活，进入失败结算');
+        
+        if (this.battleFlow) {
+            this.battleFlow.giveUpRevive();
         }
     }
     
@@ -403,23 +428,19 @@ export class BattleScene extends Component {
     private onBattleStateChanged(newState: BattleState, oldState: BattleState) {
         console.log(`[BattleScene] 状态变化: ${oldState} → ${newState}`);
         
-        // 更新 GridBuild 的战斗状态
         if (this.gridBuild) {
             this.gridBuild.setBattleState(newState);
         }
         
-        // 更新「开战」按钮可见性
         if (this.startCombatBtn) {
             const showStartBtn = newState === BattleState.DeployFast || newState === BattleState.DeployTune;
             this.startCombatBtn.active = showStartBtn;
         }
         
-        // 更新朝向指示器可见性
         if (this._aimIndicator) {
             this._aimIndicator.active = newState === BattleState.Combat;
         }
         
-        // 非部署阶段时，取消建筑选中
         const isDeployPhase = newState === BattleState.DeployFast || newState === BattleState.DeployTune;
         if (!isDeployPhase) {
             if (this.gridBuild) {
@@ -427,13 +448,9 @@ export class BattleScene extends Component {
             }
         }
         
-        // 更新教学提示
         this.updateTutorial(newState);
     }
     
-    /**
-     * 更新教学提示
-     */
     private updateTutorial(state: BattleState) {
         if (!this.tutorialLabel) return;
         
@@ -450,30 +467,26 @@ export class BattleScene extends Component {
             case BattleState.WaveClear:
                 this.tutorialLabel.string = '波次清除！准备下一波...';
                 break;
+            case BattleState.RevivePrompt:
+                this.tutorialLabel.string = '据点被摧毁！';
+                break;
             case BattleState.Settle:
-                this.tutorialLabel.string = GameData.hp > 0 ? '胜利！' : '据点被摧毁...';
+                this.tutorialLabel.string = GameData.hp > 0 ? '胜利！' : '失败...';
                 break;
             default:
                 this.tutorialLabel.string = '';
         }
     }
     
-    /**
-     * 点击「开战」按钮
-     */
     private onStartCombatClick() {
         if (this.battleFlow) {
             this.battleFlow.startCombat();
         }
     }
     
-    /**
-     * 返回大厅
-     */
     private onBackToLobby() {
         console.log('[BattleScene] 返回大厅');
         
-        // 清理战斗实体
         if (this.combat) {
             this.combat.clearAll();
         }
@@ -481,9 +494,6 @@ export class BattleScene extends Component {
         director.loadScene(SCENE_LOBBY);
     }
     
-    /**
-     * 暂停/继续
-     */
     private onPauseClick() {
         if (this.battleFlow) {
             this.battleFlow.togglePause();
@@ -499,6 +509,16 @@ export class BattleScene extends Component {
         if (this.combat) {
             this.combat.setActive(false);
         }
+        
+        // 显示胜利结算
+        if (this._settlePanel && this.battleFlow) {
+            this._settlePanel.showWin(
+                this.battleFlow.currentWave + 1,  // 已通过的波次
+                6,  // 总波次
+                this.BASE_SCRAP_REWARD,
+                () => this.onBackToLobby()
+            );
+        }
     }
     
     /**
@@ -509,6 +529,16 @@ export class BattleScene extends Component {
         
         if (this.combat) {
             this.combat.setActive(false);
+        }
+        
+        // 显示失败结算
+        if (this._settlePanel && this.battleFlow) {
+            this._settlePanel.showLose(
+                this.battleFlow.currentWave,
+                6,
+                this.BASE_SCRAP_REWARD,
+                () => this.onBackToLobby()
+            );
         }
     }
     
@@ -532,5 +562,9 @@ export class BattleScene extends Component {
         if (this.combat) {
             this.combat.spawnEnemy('Z1' as any, new Vec3(-120, 450, 0), true);
         }
+    }
+    
+    debugTriggerLose() {
+        GameData.hp = 0;
     }
 }

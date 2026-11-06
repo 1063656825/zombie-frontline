@@ -343,11 +343,107 @@ assets/scripts/core/BattleScene.ts   # 整合战斗系统、点屏转向
 
 ---
 
-## Day4+ 开发计划
+## Day4 完成内容
 
-### Day4 — 波次驱动完善
-- [ ] 波清空判定优化
-- [ ] 失败：据点 HP≤0 → 复活坑 UI
+### ✅ W0-W5 配置驱动
+- WaveConfig 完整驱动刷怪种类、数量、DP 发放、部署时长
+- W0 教学波：6 只 Z1，6 秒快落
+- W1-W4 逐波增加敌人数量和种类
+- W5 Boss 波：15×Z1 + 10×Z2 + 4×Z3
+
+### ✅ 胜负判定
+- **胜利**：W5 清完 → Settle 状态，显示胜利面板，+30 残骸
+- **失败**：据点 HP≤0 → 触发复活判定
+
+### ✅ 复活 UI（Mock 广告）
+- 失败时弹出复活面板（半透明遮罩）
+- 点击「看视频复活」→ Mock 延迟 0.5-1s
+- 复活后：回复 50% HP，重打当前波，保留已放置建筑
+- 本关仅限 1 次复活机会
+- 可点「放弃」返回失败结算
+
+### ✅ 结算面板
+- 胜利：显示通关波次、获得残骸 +30
+- 失败：显示到达波次、获得残骸 +9（30% 基础奖励）
+- 点击确认返回大厅
+
+### 新增文件
+```
+assets/scripts/ui/RevivePanel.ts    # 复活面板
+assets/scripts/ui/SettlePanel.ts    # 结算面板
+```
+
+### 修改文件
+```
+assets/scripts/battle/BattleFlow.ts  # 复活逻辑、RevivePrompt 状态
+assets/scripts/core/BattleScene.ts   # 整合复活与结算面板
+```
+
+---
+
+## Day4 验收步骤
+
+### 1. 完整波次流程
+
+1. 打开 `Battle.scene` 预览
+2. 从 W0 开始，合理部署建筑
+3. 观察波次推进：W0 → W1 → ... → W5
+4. W5 清完后显示胜利面板
+
+### 2. 胜利结算
+
+1. 通关 W5 后
+2. 显示绿色边框胜利面板
+3. 显示「通关波次: 6/6」
+4. 显示「获得残骸: +30」
+5. 点击「返回大厅」
+
+### 3. 失败与复活
+
+1. 故意让敌人穿过防线，HP 归零
+2. 弹出复活面板（红色边框）
+3. 点击「看视频复活」
+4. 等待 0.5-1 秒 Mock 加载
+5. 观察：
+   - HP 恢复到 50%
+   - 当前波重新开始
+   - 建筑保留
+   - 控制台输出 `[BattleFlow] 复活成功`
+
+### 4. 复活限制
+
+1. 复活后再次 HP 归零
+2. 直接进入失败结算（无复活选项）
+3. 显示「到达波次: X/6」
+4. 显示「获得残骸: +9」
+
+### 5. 放弃复活
+
+1. 触发失败，显示复活面板
+2. 点击「放弃」
+3. 进入失败结算面板
+
+### 控制台日志示例
+```
+[BattleScene] Day4: 复活与结算系统已启用
+[BattleFlow] 波次 0 发放 DP: +3
+[Combat] Z1 到达据点，造成 5 伤害，剩余 HP: 0
+[BattleFlow] 据点被摧毁！
+[BattleFlow] 可使用复活广告
+[BattleScene] 显示复活面板，可复活: true
+[RevivePanel] 开始 Mock 广告...
+[RevivePanel] Mock 广告成功，执行复活
+[BattleFlow] 复活成功，HP 恢复至 50，重打波次 0
+[BattleScene] 波次 0 开始
+...
+[BattleFlow] 波次 5 清除
+[BattleFlow] 战斗胜利！
+[SettlePanel] 显示胜利结算，残骸: 30
+```
+
+---
+
+## Day5+ 开发计划
 
 ### Day5 — 合成与教学
 - [ ] 部署窗拖拽同种 L1 合成 L2
@@ -391,6 +487,8 @@ GridBuild  Combat  EnemyWave
 | `BuildingPanel.ts` | 底部建筑选择面板，DP 校验与状态联动 |
 | `Combat.ts` | 战斗系统：敌人移动、建筑开火、地雷触发、主角射击 |
 | `EnemyWave.ts` | 敌人波次生成器，双路径交替 |
+| `RevivePanel.ts` | 复活面板 UI，Mock 广告延迟 |
+| `SettlePanel.ts` | 结算面板 UI，胜利/失败显示 |
 
 ### 本地存储
 
@@ -406,4 +504,4 @@ GridBuild  Combat  EnemyWave
 
 ---
 
-*Last updated: Day3 战斗系统版本*
+*Last updated: Day4 复活与结算版本*

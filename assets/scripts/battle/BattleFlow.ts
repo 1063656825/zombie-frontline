@@ -2,6 +2,7 @@
  * BattleFlow.ts
  * 战斗流程状态机
  * 状态流转: DeployFast → DeployTune → Combat → WaveClear → (循环或 Settle)
+ * Day4: 完善胜负判定、复活逻辑
  */
 
 import { _decorator, Component, Node, Label, EventTarget, director } from 'cc';
@@ -18,7 +19,8 @@ export enum BattleState {
     Combat = 'Combat',              // 战斗阶段
     WaveClear = 'WaveClear',        // 波次清除过渡
     Settle = 'Settle',              // 结算
-    Paused = 'Paused'               // 暂停
+    Paused = 'Paused',              // 暂停
+    RevivePrompt = 'RevivePrompt'   // 复活提示
 }
 
 // 状态机事件
@@ -28,6 +30,7 @@ export const EVENT_WAVE_START = 'wave_start';
 export const EVENT_WAVE_CLEAR = 'wave_clear';
 export const EVENT_BATTLE_WIN = 'battle_win';
 export const EVENT_BATTLE_LOSE = 'battle_lose';
+export const EVENT_SHOW_REVIVE = 'show_revive';  // 显示复活面板
 
 @ccclass('BattleFlow')
 export class BattleFlow extends Component {
@@ -242,12 +245,23 @@ export class BattleFlow extends Component {
         console.log('[BattleFlow] 据点被摧毁！');
         
         if (!this._isRevived) {
-            // 可以复活（显示广告）
+            // 可以复活，显示复活面板
             console.log('[BattleFlow] 可使用复活广告');
+            this.changeState(BattleState.RevivePrompt);
+            BattleEvents.emit(EVENT_SHOW_REVIVE, true);  // true = 可复活
+        } else {
+            // 已用过复活，直接失败
+            console.log('[BattleFlow] 已使用过复活，直接失败');
+            this.changeState(BattleState.Settle);
+            BattleEvents.emit(EVENT_BATTLE_LOSE);
         }
-        
-        this.changeState(BattleState.Settle);
-        BattleEvents.emit(EVENT_BATTLE_LOSE);
+    }
+    
+    /**
+     * 检查是否可以复活
+     */
+    canRevive(): boolean {
+        return !this._isRevived;
     }
     
     /**
@@ -256,7 +270,7 @@ export class BattleFlow extends Component {
     revive() {
         if (this._isRevived) {
             console.log('[BattleFlow] 本关已复活过');
-            return;
+            return false;
         }
         
         this._isRevived = true;
@@ -264,10 +278,28 @@ export class BattleFlow extends Component {
         // 回复 50% HP
         GameData.hp = Math.floor(GameData.maxHp * 0.5);
         
-        // 重新开始当前波
+        // 重置当前波的敌人计数
+        if (this._waveConfig) {
+            this._enemiesRemaining = this._waveConfig.getTotalEnemies();
+        }
+        
+        console.log(`[BattleFlow] 复活成功，HP 恢复至 ${GameData.hp}，重打波次 ${this._currentWave}`);
+        
+        // 重新开始战斗（发出 WAVE_START 让 EnemyWave 重新生成敌人）
+        this._timer = 0;
+        BattleEvents.emit(EVENT_WAVE_START, this._currentWave);
         this.changeState(BattleState.Combat);
         
-        console.log('[BattleFlow] 复活成功，HP 恢复 50%');
+        return true;
+    }
+    
+    /**
+     * 放弃复活，直接失败结算
+     */
+    giveUpRevive() {
+        console.log('[BattleFlow] 放弃复活');
+        this.changeState(BattleState.Settle);
+        BattleEvents.emit(EVENT_BATTLE_LOSE);
     }
     
     /**
@@ -282,7 +314,9 @@ export class BattleFlow extends Component {
     }
     
     update(dt: number) {
-        if (this._state === BattleState.Paused || this._state === BattleState.Settle) {
+        if (this._state === BattleState.Paused || 
+            this._state === BattleState.Settle ||
+            this._state === BattleState.RevivePrompt) {
             return;
         }
         
@@ -339,6 +373,8 @@ export class BattleFlow extends Component {
                 stateText = GameData.hp > 0 ? '胜利结算' : '失败结算';
             } else if (this._state === BattleState.Paused) {
                 stateText = '暂停';
+            } else if (this._state === BattleState.RevivePrompt) {
+                stateText = '复活确认';
             }
             this.stateLabel.string = `状态: ${stateText}`;
         }
