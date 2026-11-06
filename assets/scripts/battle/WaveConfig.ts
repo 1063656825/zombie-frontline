@@ -73,6 +73,7 @@ function createWaveConfig(config: Omit<WaveConfig, 'getTotalEnemies'>): WaveConf
 /**
  * L1-Tutorial 首关波次配置表
  * 参考设计文档 §2
+ * Day10: 平衡调参，见 BALANCE.md
  */
 export const L1_WAVE_CONFIGS: WaveConfig[] = [
     // W0 教学波
@@ -102,6 +103,7 @@ export const L1_WAVE_CONFIGS: WaveConfig[] = [
     }),
     
     // W2 - 引入快跑尸
+    // Day10: Z2 count 4→3, 更温和的 Z2 引入，降低首次失败率
     createWaveConfig({
         wave: 2,
         deployFastTime: 8,
@@ -110,26 +112,28 @@ export const L1_WAVE_CONFIGS: WaveConfig[] = [
         dpGrant: 4,
         enemies: [
             { type: EnemyType.Z1_Walker, count: 8, interval: 3 },
-            { type: EnemyType.Z2_Runner, count: 4, delay: 10, interval: 2 }
+            { type: EnemyType.Z2_Runner, count: 3, delay: 12, interval: 2.5 }  // Day10: 4→3, delay 10→12
         ],
         tutorial: '快跑尸移动速度快，用地雷卡口'
     }),
     
     // W3 - 引入合成
+    // Day10: dpGrant 3→4, 鼓励合成，缓解无合成体验
     createWaveConfig({
         wave: 3,
         deployFastTime: 8,
         deployTuneTime: 4,
         estimatedCombatTime: 45,
-        dpGrant: 3,
+        dpGrant: 4,  // Day10: 3→4
         enemies: [
             { type: EnemyType.Z1_Walker, count: 10, interval: 2.5 },
-            { type: EnemyType.Z2_Runner, count: 6, delay: 15, interval: 2 }
+            { type: EnemyType.Z2_Runner, count: 5, delay: 15, interval: 2 }  // Day10: 6→5, 配合更多 DP
         ],
         tutorial: '相同建筑叠一起可合成升级'
     }),
     
     // W4 小高潮 - 引入胖尸
+    // Day10: Z3 interval 10→12, 分散 Z3 cluster
     createWaveConfig({
         wave: 4,
         deployFastTime: 8,
@@ -139,22 +143,23 @@ export const L1_WAVE_CONFIGS: WaveConfig[] = [
         enemies: [
             { type: EnemyType.Z1_Walker, count: 12, interval: 2 },
             { type: EnemyType.Z2_Runner, count: 6, delay: 10, interval: 2.5 },
-            { type: EnemyType.Z3_Tank, count: 2, delay: 25, interval: 10 }
+            { type: EnemyType.Z3_Tank, count: 2, delay: 28, interval: 12 }  // Day10: delay 25→28, interval 10→12
         ],
         tutorial: '胖尸血厚，用炮轰建筑更有效'
     }),
     
     // W5 Boss 波
+    // Day10: Z3 interval 8→10, dpGrant 5→6, 给予最终波更多资源
     createWaveConfig({
         wave: 5,
         deployFastTime: 10,
         deployTuneTime: 5,
         estimatedCombatTime: 70,
-        dpGrant: 5,
+        dpGrant: 6,  // Day10: 5→6
         enemies: [
             { type: EnemyType.Z1_Walker, count: 15, interval: 2 },
             { type: EnemyType.Z2_Runner, count: 10, delay: 15, interval: 2 },
-            { type: EnemyType.Z3_Tank, count: 4, delay: 30, interval: 8 }
+            { type: EnemyType.Z3_Tank, count: 4, delay: 30, interval: 10 }  // Day10: interval 8→10
         ]
     })
 ];
@@ -165,18 +170,20 @@ export const WAVE_CONFIGS = L1_WAVE_CONFIGS;
 /**
  * L2-进阶 第二关波次配置表
  * Day9: 更难 - 更多 Z2/Z3、更紧凑部署、更少 DP
+ * Day10: 平衡调参，见 BALANCE.md
  */
 export const L2_WAVE_CONFIGS: WaveConfig[] = [
     // W0 开局波 - 比 L1 W0 更多敌人，已有快跑尸
+    // Day10: dpGrant 2→3, 降低开局惩罚感
     createWaveConfig({
         wave: 0,
         deployFastTime: 6,
         deployTuneTime: 3,  // 微调时间缩短
         estimatedCombatTime: 30,
-        dpGrant: 2,         // DP 减少
+        dpGrant: 3,         // Day10: 2→3, 降低开局惩罚
         enemies: [
             { type: EnemyType.Z1_Walker, count: 8, interval: 2.5 },
-            { type: EnemyType.Z2_Runner, count: 2, delay: 12, interval: 3 }
+            { type: EnemyType.Z2_Runner, count: 2, delay: 14, interval: 3 }  // Day10: delay 12→14
         ]
     }),
     
@@ -189,25 +196,27 @@ export const L2_WAVE_CONFIGS: WaveConfig[] = [
         dpGrant: 3,
         enemies: [
             { type: EnemyType.Z1_Walker, count: 10, interval: 2 },
-            { type: EnemyType.Z2_Runner, count: 5, delay: 8, interval: 2.5 }
+            { type: EnemyType.Z2_Runner, count: 5, delay: 10, interval: 2.5 }  // Day10: delay 8→10
         ]
     }),
     
     // W2 - 首次出现胖尸
+    // Day10: dpGrant 3→4, 首次 Z3 需要更多资源应对
     createWaveConfig({
         wave: 2,
         deployFastTime: 7,
         deployTuneTime: 3,
         estimatedCombatTime: 45,
-        dpGrant: 3,
+        dpGrant: 4,  // Day10: 3→4
         enemies: [
             { type: EnemyType.Z1_Walker, count: 10, interval: 2.5 },
-            { type: EnemyType.Z2_Runner, count: 6, delay: 10, interval: 2 },
-            { type: EnemyType.Z3_Tank, count: 1, delay: 20, interval: 0 }
+            { type: EnemyType.Z2_Runner, count: 5, delay: 10, interval: 2 },  // Day10: 6→5
+            { type: EnemyType.Z3_Tank, count: 1, delay: 22, interval: 0 }     // Day10: delay 20→22
         ]
     }),
     
     // W3 - 压力升级
+    // Day10: Z3 interval 8→10, 分散 cluster
     createWaveConfig({
         wave: 3,
         deployFastTime: 7,
@@ -216,36 +225,38 @@ export const L2_WAVE_CONFIGS: WaveConfig[] = [
         dpGrant: 3,
         enemies: [
             { type: EnemyType.Z1_Walker, count: 12, interval: 2 },
-            { type: EnemyType.Z2_Runner, count: 8, delay: 10, interval: 1.8 },
-            { type: EnemyType.Z3_Tank, count: 2, delay: 25, interval: 8 }
+            { type: EnemyType.Z2_Runner, count: 7, delay: 10, interval: 1.8 },  // Day10: 8→7
+            { type: EnemyType.Z3_Tank, count: 2, delay: 28, interval: 10 }      // Day10: delay 25→28, interval 8→10
         ]
     }),
     
     // W4 高潮波 - 大量混合
+    // Day10: Z3 interval 8→9, dpGrant 4→5
     createWaveConfig({
         wave: 4,
         deployFastTime: 8,
         deployTuneTime: 4,
         estimatedCombatTime: 60,
-        dpGrant: 4,
+        dpGrant: 5,  // Day10: 4→5
         enemies: [
-            { type: EnemyType.Z1_Walker, count: 15, interval: 1.8 },
-            { type: EnemyType.Z2_Runner, count: 10, delay: 8, interval: 1.5 },
-            { type: EnemyType.Z3_Tank, count: 3, delay: 20, interval: 8 }
+            { type: EnemyType.Z1_Walker, count: 14, interval: 1.8 },  // Day10: 15→14
+            { type: EnemyType.Z2_Runner, count: 9, delay: 8, interval: 1.5 },   // Day10: 10→9
+            { type: EnemyType.Z3_Tank, count: 3, delay: 22, interval: 9 }       // Day10: delay 20→22, interval 8→9
         ]
     }),
     
     // W5 Boss 波 - 尸潮
+    // Day10: dpGrant 4→5, Z3 interval 6→8
     createWaveConfig({
         wave: 5,
         deployFastTime: 10,
         deployTuneTime: 4,
         estimatedCombatTime: 80,
-        dpGrant: 4,
+        dpGrant: 5,  // Day10: 4→5
         enemies: [
-            { type: EnemyType.Z1_Walker, count: 20, interval: 1.5 },
-            { type: EnemyType.Z2_Runner, count: 15, delay: 10, interval: 1.5 },
-            { type: EnemyType.Z3_Tank, count: 6, delay: 25, interval: 6 }
+            { type: EnemyType.Z1_Walker, count: 18, interval: 1.5 },  // Day10: 20→18
+            { type: EnemyType.Z2_Runner, count: 13, delay: 10, interval: 1.5 }, // Day10: 15→13
+            { type: EnemyType.Z3_Tank, count: 5, delay: 28, interval: 8 }       // Day10: 6→5, delay 25→28, interval 6→8
         ]
     })
 ];

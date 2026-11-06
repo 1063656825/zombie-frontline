@@ -41,6 +41,7 @@ export interface BuildingStats {
 /**
  * 建筑配置表
  * 参考设计文档 §3
+ * Day10: 平衡调参，见 BALANCE.md
  */
 export const BUILDING_CONFIGS: Record<string, BuildingStats> = {
     // ========== 机枪塔 ==========
@@ -48,15 +49,15 @@ export const BUILDING_CONFIGS: Record<string, BuildingStats> = {
         type: BuildingType.MachineGun,
         level: BuildingLevel.L1,
         dpCost: 2,
-        dps: 6,
+        dps: 7,      // Day10: 6→7, 应对 W2 Z2 rush，提升 TTK
         range: 1.0,
         fireRate: 4
     },
     'MachineGun_L2': {
         type: BuildingType.MachineGun,
         level: BuildingLevel.L2,
-        dpCost: 4,  // 合成不额外消耗
-        dps: 14,
+        dpCost: 4,   // 合成不额外消耗
+        dps: 15,     // Day10: 14→15, 保持 L2 相对 L1 的 DPS 倍率
         range: 1.2,
         fireRate: 5,
         penetration: 1
@@ -71,17 +72,17 @@ export const BUILDING_CONFIGS: Record<string, BuildingStats> = {
         range: 1.2,
         fireRate: 0.8,
         aoeRadius: 0.8,
-        tankBonus: 1.5
+        tankBonus: 1.6  // Day10: 1.5→1.6, 缓解 W4/W5 Z3 压力
     },
     'Cannon_L2': {
         type: BuildingType.Cannon,
         level: BuildingLevel.L2,
         dpCost: 6,
-        dps: 9,
+        dps: 10,     // Day10: 9→10, 提升 Z3 cluster 处理能力
         range: 1.4,
         fireRate: 1.0,
         aoeRadius: 1.2,
-        tankBonus: 2.0
+        tankBonus: 2.2  // Day10: 2.0→2.2, 对抗 L2 大量 Z3
     },
     
     // ========== 地雷 ==========
@@ -92,7 +93,7 @@ export const BUILDING_CONFIGS: Record<string, BuildingStats> = {
         dps: 0,
         range: 0,
         fireRate: 0,
-        triggerDamage: 25,
+        triggerDamage: 28,   // Day10: 25→28, 配合火力加成可一击 Z2
         triggerRadius: 1.2
     },
     'Mine_L2': {
@@ -102,7 +103,7 @@ export const BUILDING_CONFIGS: Record<string, BuildingStats> = {
         dps: 0,
         range: 0,
         fireRate: 0,
-        triggerDamage: 55,
+        triggerDamage: 60,   // Day10: 55→60, 保持 L2 相对 L1 的伤害倍率
         triggerRadius: 1.6
     }
 };

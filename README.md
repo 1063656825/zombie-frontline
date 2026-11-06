@@ -1190,10 +1190,121 @@ npx vitest run tests/day9.test.ts
 
 ---
 
+## Day10 完成内容
+
+### ✅ 平衡调参
+
+详见 `BALANCE.md`，完整记录调整前后对比与理由。
+
+### 关键调整摘要
+
+**建筑 DPS 调整：**
+| 建筑 | 调整 | 理由 |
+|------|------|------|
+| MachineGun L1 | DPS 6→7 | W2 Z2 rush TTK 提升 |
+| MachineGun L2 | DPS 14→15 | 保持 L2/L1 倍率 |
+| Cannon L1 | tankBonus 1.5→1.6 | 缓解 Z3 压力 |
+| Cannon L2 | DPS 9→10, tankBonus 2.0→2.2 | Z3 cluster 清场 |
+| Mine L1 | triggerDamage 25→28 | 火力+8%后可一击 Z2 |
+| Mine L2 | triggerDamage 55→60 | 保持倍率 |
+
+**DP 发放调整：**
+| 关卡 | 波次 | 调整 | 理由 |
+|------|------|------|------|
+| L1 | W3 | 3→4 | 鼓励合成 |
+| L1 | W5 | 5→6 | 最终波资源 |
+| L2 | W0 | 2→3 | 降低开局惩罚 |
+| L2 | W2 | 3→4 | 首次 Z3 |
+| L2 | W4 | 4→5 | 高潮波 |
+| L2 | W5 | 4→5 | 最终波 |
+
+**敌人调整：**
+- L1 W2 Z2: 4→3, delay 10s→12s
+- L1 W3 Z2: 6→5
+- L1/L2 Z3 interval 拉长 (避免 cluster)
+- L2 W5 敌人减少 (Z1:20→18, Z2:15→13, Z3:6→5)
+
+### 总体变化
+
+| 指标 | L1 调整前 | L1 调整后 | L2 调整前 | L2 调整后 |
+|------|-----------|-----------|-----------|-----------|
+| 总敌人 | 93 | 91 | 133 | 124 |
+| 总 DP | 22 | 24 | 19 | 23 |
+
+### ✅ 单元测试
+
+新增 `tests/day10.test.ts`：
+- 建筑配置不变性 (cost>0, dps≥0, 无 NaN)
+- 建筑 DPS 排序 (L2>L1, MG>Cannon 单体)
+- 敌人配置不变性
+- 波次配置不变性
+- L2 比 L1 更难断言
+- DPS vs HP sanity check
+- 难度曲线递增
+
+---
+
+## Day10 验收步骤（Creator 必需）
+
+### 1. MG DPS 提升体验
+
+1. 进入 L1 W2
+2. 放置 1-2 座机枪
+3. 观察 Z2 被击杀速度比之前快
+
+### 2. W3 DP+1 体验
+
+1. 进入 L1 W3
+2. 确认收到 4 DP（而非 3）
+3. 尝试合成一座 L2 建筑
+
+### 3. Z3 cluster 缓解
+
+1. 进入 L1 W4
+2. 观察 2 只 Z3 不再同时到达
+3. 炮轰有时间逐个击杀
+
+### 4. L2 开局体验
+
+1. 选择 L2 开始
+2. W0 收到 3 DP（而非 2）
+3. 可放置 1 座机枪 + 1 座地雷
+
+### 5. 单元测试
+
+```bash
+npx vitest run tests/day10.test.ts
+```
+
+确认全部通过（41 个测试）
+
+---
+
+## Day10 单元测试
+
+运行测试：
+```bash
+npx vitest run tests/day10.test.ts
+```
+
+测试覆盖（41 个）：
+- 建筑配置不变性：dpCost>0, dps≥0, range≥0, fireRate≥0
+- 建筑 DPS 排序：L2>L1, MG>Cannon
+- 建筑成本效率：Mine 最便宜
+- 敌人配置：HP>0, speed>0, Z3>Z1 HP, Z2>Z1 speed
+- 波次配置：6 波, dpGrant>0, enemies>0
+- L2 比 L1 更难：总敌人≥, 总 HP≥, Z3 更多
+- Day10 调整后数值：L1=91, L2=124, DP=24/23
+- DPS vs HP sanity check：MG 能清 W0/W2, Cannon vs Z3 TTK<3s
+- 难度曲线递增
+- 无 NaN 检查
+
+---
+
 ## 联系方式
 
 如有问题，请联系项目负责人。
 
 ---
 
-*Last updated: Day9 第二关版本*
+*Last updated: Day10 平衡调参版本*
