@@ -77,9 +77,9 @@ export function rollMergeRefund(): boolean {
     return Math.random() < 0.5;
 }
 
-// Line B level 3: 3% damage reduction on hit
+// Line B level 4: 3% damage reduction on hit (upgrade 3→4)
 export function hasDamageReduction(fortLevel: number): boolean {
-    return fortLevel >= 3;
+    return fortLevel >= 4;
 }
 
 export const DAMAGE_REDUCTION_PERCENT = 3;
@@ -103,11 +103,11 @@ export function getFirepowerEffectText(level: number): string {
 export function getFortEffectText(level: number): string {
     if (level >= MAX_LEVEL) return '已满级';
     const texts = [
-        '据点最大 HP +15',
-        '累计 HP +30',
-        '累计 HP +50, 受击减伤 3%',
-        '受击减伤 3%',
-        '累计 HP +75'
+        '据点最大 HP +15',           // 0→1
+        '累计 HP +30',               // 1→2
+        '累计 HP +50',               // 2→3
+        '受击减伤 3%',               // 3→4
+        '累计 HP +75'                // 4→5
     ];
     return texts[level] || '';
 }

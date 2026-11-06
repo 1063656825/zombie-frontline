@@ -2,11 +2,13 @@
  * SettlePanel.ts
  * 结算面板 UI
  * Day4: 胜利/失败结算显示
- * Day5: 胜利双倍奖励（Mock 广告）
+ * Day5: 胜利双倍奖励
+ * Day7: 使用 AdService 统一广告调用
  */
 
 import { _decorator, Component, Node, Label, Graphics, Color, UITransform } from 'cc';
 import { GameData } from '../data/GameData';
+import { AdService, AdSlot } from '../ads/AdService';
 
 const { ccclass, property } = _decorator;
 
@@ -119,25 +121,25 @@ export class SettlePanel extends Component {
         this.scrapLabel.lineHeight = 36;
         this.scrapLabel.color = new Color(255, 215, 0, 255);
         
-        // 双倍奖励按钮（Day5）
+        // 双倍奖励按钮（Day5/Day7）
         this._doubleBtn = new Node('DoubleBtn');
         this._doubleBtn.parent = panel;
         this._doubleBtn.setPosition(0, -60, 0);
         
         const doubleBtnTransform = this._doubleBtn.addComponent(UITransform);
-        doubleBtnTransform.setContentSize(240, 50);
+        doubleBtnTransform.setContentSize(300, 50);
         
         const doubleBtnGraphics = this._doubleBtn.addComponent(Graphics);
         doubleBtnGraphics.fillColor = new Color(255, 180, 0, 255);
-        doubleBtnGraphics.roundRect(-120, -25, 240, 50, 8);
+        doubleBtnGraphics.roundRect(-150, -25, 300, 50, 8);
         doubleBtnGraphics.fill();
         
         const doubleBtnLabelNode = new Node('Label');
         doubleBtnLabelNode.parent = this._doubleBtn;
         this._doubleBtnLabel = doubleBtnLabelNode.addComponent(Label);
-        this._doubleBtnLabel.string = '看视频双倍 (模拟)';
-        this._doubleBtnLabel.fontSize = 22;
-        this._doubleBtnLabel.lineHeight = 28;
+        this._doubleBtnLabel.string = '看完视频，残骸翻倍带走';
+        this._doubleBtnLabel.fontSize = 20;
+        this._doubleBtnLabel.lineHeight = 26;
         this._doubleBtnLabel.color = new Color(0, 0, 0, 255);
         
         // 确认按钮
@@ -299,23 +301,21 @@ export class SettlePanel extends Component {
     }
     
     /**
-     * 双倍按钮点击（Day5）
+     * 双倍按钮点击 - Day7: 使用 AdService
      */
-    private onDoubleClick() {
+    private async onDoubleClick() {
         if (this._doubleState !== DoubleRewardState.Idle) {
             console.log('[SettlePanel] 双倍奖励不可用');
             return;
         }
         
-        console.log('[SettlePanel] 开始模拟广告...');
+        console.log('[SettlePanel] 请求双倍广告...');
         this._doubleState = DoubleRewardState.Watching;
         this.updateDoubleButton();
         
-        // Mock 广告延迟 0.5-1s
-        const delay = 0.5 + Math.random() * 0.5;
-        this.scheduleOnce(() => {
-            this.onAdComplete(true);
-        }, delay);
+        // 通过 AdService 请求广告
+        const result = await AdService.showRewarded(AdSlot.SettleDouble);
+        this.onAdComplete(result.ok);
     }
     
     /**
@@ -362,11 +362,11 @@ export class SettlePanel extends Component {
         
         switch (this._doubleState) {
             case DoubleRewardState.Idle:
-                this._doubleBtnLabel.string = '看视频双倍 (模拟)';
+                this._doubleBtnLabel.string = '看完视频，残骸翻倍带走';
                 if (graphics) {
                     graphics.clear();
                     graphics.fillColor = new Color(255, 180, 0, 255);
-                    graphics.roundRect(-120, -25, 240, 50, 8);
+                    graphics.roundRect(-150, -25, 300, 50, 8);
                     graphics.fill();
                 }
                 break;
@@ -376,7 +376,7 @@ export class SettlePanel extends Component {
                 if (graphics) {
                     graphics.clear();
                     graphics.fillColor = new Color(150, 150, 150, 255);
-                    graphics.roundRect(-120, -25, 240, 50, 8);
+                    graphics.roundRect(-150, -25, 300, 50, 8);
                     graphics.fill();
                 }
                 break;
@@ -386,7 +386,7 @@ export class SettlePanel extends Component {
                 if (graphics) {
                     graphics.clear();
                     graphics.fillColor = new Color(100, 150, 100, 255);
-                    graphics.roundRect(-120, -25, 240, 50, 8);
+                    graphics.roundRect(-150, -25, 300, 50, 8);
                     graphics.fill();
                 }
                 break;

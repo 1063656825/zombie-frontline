@@ -3,6 +3,7 @@
  * 战斗场景控制器
  * 整合 BattleFlow、GridBuild、BuildingPanel、Combat、EnemyWave 系统
  * Day4: 复活面板、结算面板、胜负判定
+ * Day7: 补给按钮、微信桥接
  */
 
 import { _decorator, Component, Label, Node, director, Button, Color, Sprite, UITransform, Graphics, Vec3, EventTouch } from 'cc';
@@ -15,8 +16,10 @@ import { EnemyWave } from '../battle/EnemyWave';
 import { RevivePanel } from '../ui/RevivePanel';
 import { SettlePanel } from '../ui/SettlePanel';
 import { TutorialGuide, TutorialType } from '../ui/TutorialGuide';
+import { SupplyButton } from '../ui/SupplyButton';
 import { BuildingType, BUILDING_NAMES } from '../battle/BuildingConfig';
 import { SCENE_LOBBY } from './SceneManager';
+import { initWxBridge } from '../platform/WxBridge';
 
 const { ccclass, property } = _decorator;
 
@@ -73,6 +76,7 @@ export class BattleScene extends Component {
     private _revivePanel: RevivePanel | null = null;
     private _settlePanel: SettlePanel | null = null;
     private _tutorialGuide: TutorialGuide | null = null;
+    private _supplyButton: SupplyButton | null = null;
     
     // 主角朝向指示器
     private _aimIndicator: Node | null = null;
@@ -85,6 +89,9 @@ export class BattleScene extends Component {
     
     start() {
         console.log('[BattleScene] 战斗场景开始');
+        
+        // Day7: 初始化微信桥接
+        initWxBridge();
         
         this.setupEventListeners();
         this.setupButtons();
@@ -120,7 +127,7 @@ export class BattleScene extends Component {
         // 创建朝向指示器
         this.createAimIndicator();
         
-        console.log('[BattleScene] Day5: 合成与引导系统已启用');
+        console.log('[BattleScene] Day7: 广告三坑与微信桥接已启用');
     }
     
     onDestroy() {
@@ -148,6 +155,17 @@ export class BattleScene extends Component {
         tutorialNode.parent = this.node;
         tutorialNode.setPosition(0, 0, 0);
         this._tutorialGuide = tutorialNode.addComponent(TutorialGuide);
+        
+        // 补给按钮（Day7）
+        const supplyNode = new Node('SupplyButton');
+        supplyNode.parent = this.node;
+        supplyNode.setPosition(0, 0, 0);
+        this._supplyButton = supplyNode.addComponent(SupplyButton);
+        this._supplyButton.setOnSupplyGranted(() => {
+            if (this.buildingPanel) {
+                this.buildingPanel.updateAllButtons();
+            }
+        });
     }
     
     private setupEventListeners() {
@@ -480,6 +498,11 @@ export class BattleScene extends Component {
         
         if (this._aimIndicator) {
             this._aimIndicator.active = newState === BattleState.Combat;
+        }
+        
+        // Day7: 更新补给按钮状态
+        if (this._supplyButton) {
+            this._supplyButton.setBattleState(newState);
         }
         
         const isDeployPhase = newState === BattleState.DeployFast || newState === BattleState.DeployTune;

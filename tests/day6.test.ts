@@ -71,7 +71,7 @@ function hasMergeRefundChance(supplyLevel: number): boolean {
 }
 
 function hasDamageReduction(fortLevel: number): boolean {
-    return fortLevel >= 3;
+    return fortLevel >= 4;  // 3→4 upgrade unlocks DR
 }
 
 const DAMAGE_REDUCTION_PERCENT = 3;
@@ -244,9 +244,13 @@ describe('城防线效果 (Line B)', () => {
         expect(getFortHpBonus(2)).toBe(30);
     });
     
-    it('Lv.3 累计 +50 HP + 减伤', () => {
+    it('Lv.3 累计 +50 HP, 减伤在 4 级解锁', () => {
         expect(getFortHpBonus(3)).toBe(50);
-        expect(hasDamageReduction(3)).toBe(true);
+        expect(hasDamageReduction(3)).toBe(false);  // DR unlocks at level 4
+    });
+    
+    it('Lv.4 开启减伤 3%', () => {
+        expect(hasDamageReduction(4)).toBe(true);
     });
     
     it('Lv.5 累计 +75 HP', () => {

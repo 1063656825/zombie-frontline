@@ -248,7 +248,7 @@ export class Combat extends Component {
         const stats = ENEMY_STATS[enemy.type];
         let damage = stats.damage;
         
-        // Day6: 城防线 B≥3 受击减伤 3%
+        // Day6: 城防线 B≥4 受击减伤 3%
         if (GameData.hasDamageReduction()) {
             const reduction = damage * (DAMAGE_REDUCTION_PERCENT / 100);
             damage = Math.max(1, damage - reduction);
