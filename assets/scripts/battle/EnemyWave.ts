@@ -1,7 +1,7 @@
 /**
  * EnemyWave.ts
  * 敌人波次生成器
- * Day4 实现完整的波次驱动与时间轴生成
+ * Day3: 按 WaveConfig 生成敌人，双路径交替
  */
 
 import { _decorator, Component, Node, Vec3 } from 'cc';
@@ -16,7 +16,7 @@ const { ccclass, property } = _decorator;
 interface SpawnQueueItem {
     type: EnemyType;
     spawnTime: number;      // 相对本波开始的时间
-    spawnPosition: Vec3;    // 生成位置
+    useLeftPath: boolean;   // 使用左路还是右路
     spawned: boolean;
 }
 
@@ -26,12 +26,6 @@ export class EnemyWave extends Component {
     @property(Combat)
     combat: Combat | null = null;
     
-    @property(Node)
-    spawnPointLeft: Node | null = null;
-    
-    @property(Node)
-    spawnPointRight: Node | null = null;
-    
     // 当前波次
     private _currentWave: number = -1;
     private _waveConfig: WaveConfig | null = null;
@@ -40,6 +34,9 @@ export class EnemyWave extends Component {
     private _spawnQueue: SpawnQueueItem[] = [];
     private _waveTimer: number = 0;
     private _isWaveActive: boolean = false;
+    
+    // 路径交替计数
+    private _pathCounter: number = 0;
     
     /**
      * 开始波次
@@ -57,6 +54,7 @@ export class EnemyWave extends Component {
         this._spawnQueue = this.buildSpawnQueue(this._waveConfig);
         this._waveTimer = 0;
         this._isWaveActive = true;
+        this._pathCounter = 0;
         
         console.log(`[EnemyWave] 开始波次 ${waveIndex}, 敌人总数: ${this._spawnQueue.length}`);
     }
@@ -73,15 +71,19 @@ export class EnemyWave extends Component {
             
             for (let i = 0; i < spawn.count; i++) {
                 const spawnTime = delay + i * interval;
-                const spawnPosition = this.getSpawnPosition(i % 2 === 0);
+                
+                // 交替使用左右路径
+                const useLeftPath = (this._pathCounter + i) % 2 === 0;
                 
                 queue.push({
                     type: spawn.type,
                     spawnTime,
-                    spawnPosition,
+                    useLeftPath,
                     spawned: false
                 });
             }
+            
+            this._pathCounter += spawn.count;
         }
         
         // 按时间排序
@@ -91,29 +93,12 @@ export class EnemyWave extends Component {
     }
     
     /**
-     * 获取生成位置
-     */
-    private getSpawnPosition(isLeft: boolean): Vec3 {
-        // 默认位置（屏幕顶部两侧）
-        const x = isLeft ? -150 : 150;
-        const y = 500;
-        
-        if (isLeft && this.spawnPointLeft) {
-            return this.spawnPointLeft.position.clone();
-        }
-        if (!isLeft && this.spawnPointRight) {
-            return this.spawnPointRight.position.clone();
-        }
-        
-        return new Vec3(x, y, 0);
-    }
-    
-    /**
      * 停止波次
      */
     stopWave() {
         this._isWaveActive = false;
         this._spawnQueue = [];
+        console.log('[EnemyWave] 波次停止');
     }
     
     /**
@@ -121,6 +106,20 @@ export class EnemyWave extends Component {
      */
     isSpawnComplete(): boolean {
         return this._spawnQueue.every(item => item.spawned);
+    }
+    
+    /**
+     * 获取已生成数量
+     */
+    getSpawnedCount(): number {
+        return this._spawnQueue.filter(item => item.spawned).length;
+    }
+    
+    /**
+     * 获取总数量
+     */
+    getTotalCount(): number {
+        return this._spawnQueue.length;
     }
     
     update(dt: number) {
@@ -132,8 +131,16 @@ export class EnemyWave extends Component {
         for (const item of this._spawnQueue) {
             if (!item.spawned && this._waveTimer >= item.spawnTime) {
                 // 生成敌人
-                this.combat.spawnEnemy(item.type, item.spawnPosition);
+                const spawnPos = new Vec3(
+                    item.useLeftPath ? -120 : 120,
+                    450,
+                    0
+                );
+                
+                this.combat.spawnEnemy(item.type, spawnPos, item.useLeftPath);
                 item.spawned = true;
+                
+                console.log(`[EnemyWave] 生成敌人: ${item.type} (${item.useLeftPath ? '左' : '右'}路), 进度: ${this.getSpawnedCount()}/${this.getTotalCount()}`);
             }
         }
     }
