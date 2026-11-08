@@ -133,7 +133,7 @@ supply: 0-5;      // 补给线（开局 DP 加成）
 2. 点击编辑器顶部的「预览」按钮（或按 F5）
 3. 浏览器应先显示「尸潮防线」加载页，约 1.5 秒进入大厅（「开始战斗」）
 
-若仍停在加载页或出现 `this._children[i]._onBatchCreated is not a function`：关掉 Creator，删除项目下 `library/` 与 `temp/` 后重新打开再预览 Boot（场景 UUID / 脚本 `.meta` 已固定）。详情见 `CREATOR_QA.md` §0。
+若仍停在加载页、Console 出现 `Can not find class`，或 `_onBatchCreated is not a function`：关掉 Creator，删除项目下 `library/` 与 `temp/` 后重新打开再预览 Boot。脚本 class id 已改为 Creator 压缩 UUID，旧 `library/` 对不上。详情见 `CREATOR_QA.md` §0。
 
 ---
 

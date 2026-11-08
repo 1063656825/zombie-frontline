@@ -3,23 +3,32 @@
 from __future__ import annotations
 
 import json
+import sys
+import uuid as uuidlib
 from pathlib import Path
 
 ROOT = Path("/workspace")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cocos_uuid import compress_uuid  # noqa: E402
 
-# Stable UUIDs (must match *.meta)
+
+def meta_uuid(rel: str) -> str:
+    return json.loads((ROOT / f"{rel}.meta").read_text(encoding="utf-8"))["uuid"]
+
+
+# Full UUIDs live in *.meta (Creator-style v4). Scene script __type__ is compressed.
 UUID = {
-    "Boot.scene": "a0000001-0000-4000-8000-000000000001",
-    "Lobby.scene": "a0000001-0000-4000-8000-000000000002",
-    "Battle.scene": "a0000001-0000-4000-8000-000000000003",
-    "BootScene": "b0000001-0000-4000-8000-000000000001",
-    "LobbyScene": "b0000001-0000-4000-8000-000000000002",
-    "BattleScene": "b0000001-0000-4000-8000-000000000003",
-    "BattleFlow": "b0000001-0000-4000-8000-000000000004",
-    "GridBuild": "b0000001-0000-4000-8000-000000000005",
-    "Combat": "b0000001-0000-4000-8000-000000000006",
-    "EnemyWave": "b0000001-0000-4000-8000-000000000007",
-    "BuildingPanel": "b0000001-0000-4000-8000-000000000008",
+    "Boot.scene": meta_uuid("assets/scenes/Boot.scene"),
+    "Lobby.scene": meta_uuid("assets/scenes/Lobby.scene"),
+    "Battle.scene": meta_uuid("assets/scenes/Battle.scene"),
+    "BootScene": meta_uuid("assets/scripts/core/BootScene.ts"),
+    "LobbyScene": meta_uuid("assets/scripts/core/LobbyScene.ts"),
+    "BattleScene": meta_uuid("assets/scripts/core/BattleScene.ts"),
+    "BattleFlow": meta_uuid("assets/scripts/battle/BattleFlow.ts"),
+    "GridBuild": meta_uuid("assets/scripts/battle/GridBuild.ts"),
+    "Combat": meta_uuid("assets/scripts/battle/Combat.ts"),
+    "EnemyWave": meta_uuid("assets/scripts/battle/EnemyWave.ts"),
+    "BuildingPanel": meta_uuid("assets/scripts/ui/BuildingPanel.ts"),
 }
 
 LAYER_UI = 33554432  # UI_2D
@@ -184,7 +193,8 @@ class SceneBuilder:
         })
 
     def script(self, node_id: int, class_key: str, props: dict | None = None) -> int:
-        obj = {"__type__": UUID[class_key]}
+        # Creator 3.8.6 _RF.push registers compressUuid(meta.uuid, min=false)
+        obj = {"__type__": compress_uuid(UUID[class_key])}
         if props:
             obj.update(props)
         return self.add_comp(node_id, obj)
@@ -428,6 +438,7 @@ def main():
         "assets/scripts/ui/BuildingPanel.ts": "BuildingPanel",
     }
     extra = [
+        "assets/scripts/core/BootGate.ts",
         "assets/scripts/core/SceneManager.ts",
         "assets/scripts/core/ObjectPool.ts",
         "assets/scripts/data/GameData.ts",
@@ -449,13 +460,12 @@ def main():
         "assets/scripts/effects/HitEffects.ts",
         "assets/scripts/effects/ExplosionVFX.ts",
     ]
-    n = 20
     for rel, key in scripts.items():
         write_meta(ROOT / f"{rel}.meta", "typescript", UUID[key], "4.0.24")
     for rel in extra:
-        n += 1
-        uid = f"b0000001-0000-4000-8000-0000000000{n:02d}"
-        write_meta(ROOT / f"{rel}.meta", "typescript", uid, "4.0.24")
+        meta_path = ROOT / f"{rel}.meta"
+        uid = json.loads(meta_path.read_text(encoding="utf-8"))["uuid"] if meta_path.exists() else str(uuidlib.uuid4())
+        write_meta(meta_path, "typescript", uid, "4.0.24")
 
     # start scene uuid
     proj = ROOT / "settings/v2/packages/project.json"

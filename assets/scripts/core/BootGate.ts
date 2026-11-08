@@ -9,8 +9,8 @@
 
 export const MIN_BOOT_TIME = 1.5;
 export const SCENE_NAME_LOBBY = 'Lobby';
-export const LOBBY_SCENE_UUID = 'a0000001-0000-4000-8000-000000000002';
-export const BATTLE_SCENE_UUID = 'a0000001-0000-4000-8000-000000000003';
+export const LOBBY_SCENE_UUID = '574302a8-b8cc-477d-8f8f-44fa52d267bf';
+export const BATTLE_SCENE_UUID = 'fc9cb047-7356-4dff-a2de-92a27c4ee4f3';
 
 export function shouldJumpFromBoot(
     isReady: boolean,

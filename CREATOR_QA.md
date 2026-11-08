@@ -13,10 +13,11 @@ VM 无 Creator：**下列全部仍须人工**。单元测试见仓库 `npx vites
 - [ ] `settings/v2/packages/project.json` 设计分辨率 720×1280、fitHeight
 - [ ] 启动场景为 `assets/scenes/Boot.scene`
 - [ ] 预览竖屏，画布不被横向裁切到无法点按钮
-- [ ] 预览 `Boot.scene` 能进画面，约 1.5s 离开加载页进入 Lobby（可只预览当前 Boot，不必先打开 Lobby）
-- [ ] 若本地曾用旧 scene / 旧 Boot 跳转生成过 `library/`：关掉 Creator，删掉项目里的 `library/`、`temp/` 后重开（脚本 `.meta` UUID 已入库，须与场景引用一致）
+- [ ] 预览 `Boot.scene` 能进画面，Console 有 `[BootScene] 启动场景开始`，约 1.5s 离开加载页进入 Lobby（可只预览当前 Boot，不必先打开 Lobby）
+- [ ] 预览 Console **没有** `Can not find class '…'` / `component of 'Canvas' … is corrupted`
+- [ ] 若本地曾用旧 scene / 旧 UUID 生成过 `library/`：关掉 Creator，删掉项目里的 `library/`、`temp/` 后重开（脚本 `.meta` UUID 已入库，须与场景压缩 class id 一致）
 
-**Mac 本地（Boot 仍停在加载页时）：** `git pull` 最新 → 完全退出 Creator → 删项目根下 `library/` 和 `temp/` → 再打开工程等脚本编译完 → 双击 `assets/scenes/Boot.scene` → 预览。约 1.5s 应变大厅（标题「尸潮防线」+「开始战斗」）。不必先打开 Lobby。Console 里应看到 `[BootScene] 使用序列化 Lobby SceneAsset` 或 `UUID 回退`，不应一直停在「进入大厅...」。
+**Mac 本地（Boot 仍停在加载页 / 报 Can not find class 时）：** `git pull` 最新 → **完全退出 Creator** → 删项目根下 `library/` 和 `temp/` → 再打开工程，等脚本编译完 → 双击 `assets/scenes/Boot.scene` → 预览。不必先打开 Lobby。约 1.5s 应进大厅（标题「尸潮防线」+「开始战斗」）。Console 应有 `[BootScene] 启动场景开始`，不应再出现 `Can not find class 'b0000001-…'`。
 
 ---
 

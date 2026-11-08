@@ -1,5 +1,5 @@
 /**
- * Boot → Lobby 跳转闸门
+ * Boot → Lobby 跳转闸门 + Creator 3.8.6 脚本 class id
  * 运行: npx vitest run tests/boot-gate.test.ts
  */
 
@@ -15,6 +15,15 @@ import {
     shouldFallbackToUuid,
     launchedCallbackHasError
 } from '../assets/scripts/core/BootGate';
+import { compressUuid, decompressUuid } from './cocos-uuid';
+
+function readJson(rel: string) {
+    return JSON.parse(readFileSync(resolve(__dirname, '..', rel), 'utf8'));
+}
+
+function metaUuid(rel: string): string {
+    return readJson(rel).uuid as string;
+}
 
 describe('shouldJumpFromBoot', () => {
     it('未就绪不跳', () => {
@@ -57,8 +66,8 @@ describe('Lobby 场景名', () => {
     });
     
     it('Lobby / Battle UUID 与 *.scene.meta 一致', () => {
-        expect(LOBBY_SCENE_UUID).toBe('a0000001-0000-4000-8000-000000000002');
-        expect(BATTLE_SCENE_UUID).toBe('a0000001-0000-4000-8000-000000000003');
+        expect(LOBBY_SCENE_UUID).toBe(metaUuid('assets/scenes/Lobby.scene.meta'));
+        expect(BATTLE_SCENE_UUID).toBe(metaUuid('assets/scenes/Battle.scene.meta'));
     });
 });
 
@@ -100,9 +109,32 @@ describe('launchedCallbackHasError', () => {
     });
 });
 
+describe('Creator 3.8.6 UUID compress', () => {
+    it('官方向量：默认 23 位与 min 22 位', () => {
+        const known = 'fc991dd7-0033-4b80-9d41-c8a86a702e59';
+        expect(compressUuid(known)).toBe('fc9913XADNLgJ1ByKhqcC5Z');
+        expect(compressUuid(known, true)).toBe('fcmR3XADNLgJ1ByKhqcC5Z');
+        expect(decompressUuid('fc9913XADNLgJ1ByKhqcC5Z')).toBe(known);
+        expect(decompressUuid('fcmR3XADNLgJ1ByKhqcC5Z')).toBe(known);
+    });
+    
+    it('旧手搓 BootScene uuid 的 compress 正是 Mac 预览里的 _RF.push id', () => {
+        expect(compressUuid('b0000001-0000-4000-8000-000000000001')).toBe('b0000ABAABAAIAAAAAAAAAB');
+    });
+    
+    it('当前脚本 meta uuid 都能 compress/decompress 往返', () => {
+        const boot = metaUuid('assets/scripts/core/BootScene.ts.meta');
+        expect(boot).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+        expect(decompressUuid(compressUuid(boot))).toBe(boot);
+        expect(compressUuid(boot)).toHaveLength(23);
+        expect(compressUuid(boot)).not.toMatch(/-/);
+    });
+});
+
 describe('Boot.scene 序列化', () => {
-    const bootPath = resolve(__dirname, '../assets/scenes/Boot.scene');
-    const boot = JSON.parse(readFileSync(bootPath, 'utf8')) as Array<Record<string, unknown>>;
+    const boot = readJson('assets/scenes/Boot.scene') as Array<Record<string, unknown>>;
+    const bootSceneUuid = metaUuid('assets/scripts/core/BootScene.ts.meta');
+    const classId = compressUuid(bootSceneUuid);
     
     it('_children 只有 Node（避免 _onBatchCreated is not a function）', () => {
         const scene = boot.find((o) => o.__type__ === 'cc.Scene' && o._name === 'Boot') as {
@@ -114,18 +146,32 @@ describe('Boot.scene 序列化', () => {
         }
     });
     
-    it('BootScene 序列化引用 Lobby.scene UUID（预览当前 Boot 也会打进 Lobby）', () => {
-        const bootComp = boot.find((o) => o.__type__ === 'b0000001-0000-4000-8000-000000000001') as {
+    it('BootScene __type__ 是 23 位压缩 id（与 _RF.push 一致，不是 dashed meta uuid）', () => {
+        const bootComp = boot.find((o) => o.__type__ === classId) as {
+            __type__: string;
             lobbyScene?: { __uuid__: string };
         };
-        expect(bootComp).toBeTruthy();
+        expect(bootComp, `missing __type__ ${classId}`).toBeTruthy();
+        expect(bootComp.__type__).toBe(classId);
+        expect(bootComp.__type__).not.toBe(bootSceneUuid);
+        expect(boot.find((o) => o.__type__ === bootSceneUuid)).toBeUndefined();
         expect(bootComp.lobbyScene?.__uuid__).toBe(LOBBY_SCENE_UUID);
+    });
+    
+    it('Canvas 第 4 个组件（index 3）仍是 BootScene', () => {
+        const canvas = boot.find((o) => o.__type__ === 'cc.Node' && o._name === 'Canvas') as {
+            _components: Array<{ __id__: number }>;
+        };
+        expect(canvas._components.length).toBeGreaterThanOrEqual(4);
+        const idx3 = boot[canvas._components[3].__id__] as { __type__: string };
+        expect(idx3.__type__).toBe(classId);
     });
 });
 
 describe('Lobby.scene 序列化', () => {
-    const lobbyPath = resolve(__dirname, '../assets/scenes/Lobby.scene');
-    const lobby = JSON.parse(readFileSync(lobbyPath, 'utf8')) as Array<Record<string, unknown>>;
+    const lobby = readJson('assets/scenes/Lobby.scene') as Array<Record<string, unknown>>;
+    const lobbySceneUuid = metaUuid('assets/scripts/core/LobbyScene.ts.meta');
+    const classId = compressUuid(lobbySceneUuid);
     
     it('_children 只有 Node', () => {
         const scene = lobby.find((o) => o.__type__ === 'cc.Scene' && o._name === 'Lobby') as {
@@ -137,10 +183,12 @@ describe('Lobby.scene 序列化', () => {
         }
     });
     
-    it('LobbyScene 序列化引用 Battle.scene UUID', () => {
-        const lobbyComp = lobby.find((o) => o.__type__ === 'b0000001-0000-4000-8000-000000000002') as {
+    it('LobbyScene __type__ 为压缩 class id，并序列化引用 Battle.scene', () => {
+        const lobbyComp = lobby.find((o) => o.__type__ === classId) as {
             battleScene?: { __uuid__: string };
         };
+        expect(lobbyComp).toBeTruthy();
         expect(lobbyComp.battleScene?.__uuid__).toBe(BATTLE_SCENE_UUID);
+        expect(lobby.find((o) => o.__type__ === lobbySceneUuid)).toBeUndefined();
     });
 });

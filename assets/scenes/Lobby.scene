@@ -590,7 +590,7 @@
     }
   },
   {
-    "__type__": "b0000001-0000-4000-8000-000000000002",
+    "__type__": "ba60ctXVXlECb30P37Feyjl",
     "scrapLabel": {
       "__id__": 13
     },
@@ -601,7 +601,7 @@
       "__id__": 4
     },
     "battleScene": {
-      "__uuid__": "a0000001-0000-4000-8000-000000000003",
+      "__uuid__": "fc9cb047-7356-4dff-a2de-92a27c4ee4f3",
       "__expectedType__": "cc.SceneAsset"
     },
     "_name": "",
