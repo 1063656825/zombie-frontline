@@ -24,6 +24,7 @@ import { initWxBridge } from '../platform/WxBridge';
 import { DeployPhaseIndicator } from '../ui/DeployPhaseIndicator';
 import { DangerSideIndicator, EnemyPosition } from '../ui/DangerSideIndicator';
 import { applyDebugOverlayPolicy } from './DebugOverlay';
+import { applyPixelSprite } from '../pixel/PixelBlit';
 
 const { ccclass, property } = _decorator;
 
@@ -317,38 +318,37 @@ export class BattleScene extends Component {
         this._aimIndicator.setPosition(0, -450, 0);
         
         const graphics = this._aimIndicator.addComponent(Graphics);
-        graphics.strokeColor = new Color(255, 255, 100, 150);
-        graphics.lineWidth = 3;
-        
         this.drawAimLine(graphics, new Vec3(0, 1, 0));
         this._aimIndicator.active = false;
     }
     
     private drawAimLine(graphics: Graphics, direction: Vec3) {
         graphics.clear();
-        
-        const length = 150;
-        const endX = direction.x * length;
-        const endY = direction.y * length;
-        
-        graphics.moveTo(0, 0);
-        graphics.lineTo(endX, endY);
-        graphics.stroke();
-        
-        const angle = 30 * Math.PI / 180;
+        const length = 148;
+        const steps = 18;
+        graphics.fillColor = new Color(232, 220, 100, 200);
+        for (let i = 1; i <= steps; i++) {
+            const t = i / steps;
+            const x = direction.x * length * t;
+            const y = direction.y * length * t;
+            graphics.rect(x - 3, y - 3, 6, 6);
+            graphics.fill();
+        }
+        const angle = 28 * Math.PI / 180;
         const cos = Math.cos(angle);
         const sin = Math.sin(angle);
-        
-        const leftX = (direction.x * cos - direction.y * sin) * length * 0.7;
-        const leftY = (direction.x * sin + direction.y * cos) * length * 0.7;
-        const rightX = (direction.x * cos + direction.y * sin) * length * 0.7;
-        const rightY = (-direction.x * sin + direction.y * cos) * length * 0.7;
-        
-        graphics.moveTo(0, 0);
-        graphics.lineTo(leftX, leftY);
-        graphics.moveTo(0, 0);
-        graphics.lineTo(rightX, rightY);
-        graphics.stroke();
+        const arms = [
+            new Vec3(direction.x * cos - direction.y * sin, direction.x * sin + direction.y * cos, 0),
+            new Vec3(direction.x * cos + direction.y * sin, -direction.x * sin + direction.y * cos, 0)
+        ];
+        graphics.fillColor = new Color(232, 220, 100, 140);
+        for (const arm of arms) {
+            for (let i = 1; i <= 12; i++) {
+                const t = i / 12;
+                graphics.rect(arm.x * length * 0.7 * t - 2, arm.y * length * 0.7 * t - 2, 4, 4);
+                graphics.fill();
+            }
+        }
     }
     
     private updateAimIndicator(targetPos: Vec3) {
@@ -427,21 +427,9 @@ export class BattleScene extends Component {
     
     private createPlaceholderGraphics() {
         if (this.baseNode) {
-            this.drawColorBlock(this.baseNode, new Color(33, 150, 243, 255), 200, 40);
-            console.log('[BattleScene] 创建据点占位');
+            applyPixelSprite(this.baseNode, 'base', 5);
+            console.log('[BattleScene] 据点像素精灵');
         }
-    }
-    
-    private drawColorBlock(node: Node, color: Color, width: number, height: number) {
-        let graphics = node.getComponent(Graphics);
-        if (!graphics) {
-            graphics = node.addComponent(Graphics);
-        }
-        
-        graphics.clear();
-        graphics.fillColor = color;
-        graphics.rect(-width / 2, -height / 2, width, height);
-        graphics.fill();
     }
     
     /**

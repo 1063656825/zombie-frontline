@@ -80,6 +80,7 @@ class AdServiceManager {
     // Mock 模式配置
     private _forceMock: boolean = false;
     private _mockFailRate: number = 0;  // 0-1, 用于测试
+    private _mockDelayMs: number = 0;   // 0 = 默认 500–1000ms；测试可设短延迟
     
     private constructor() {}
     
@@ -111,10 +112,19 @@ class AdServiceManager {
         const adUnitId = AD_UNIT_IDS[slot];
         const useRealAd = !this._forceMock && this.isWeChatEnv() && adUnitId;
         
-        if (useRealAd) {
-            return this.showRealAd(slot, adUnitId);
-        } else {
-            return this.showMockAd(slot);
+        try {
+            if (useRealAd) {
+                return await this.showRealAd(slot, adUnitId);
+            }
+            return await this.showMockAd(slot);
+        } catch (e) {
+            console.error('[AdService] showRewarded 异常，解除占用:', e);
+            return { ok: false, reason: 'error' };
+        } finally {
+            this._currentSlot = null;
+            if (this.isLoading) {
+                this._state = AdState.Failed;
+            }
         }
     }
     
@@ -126,8 +136,7 @@ class AdServiceManager {
         
         this._state = AdState.Showing;
         
-        // 模拟延迟 0.5-1s
-        const delay = 500 + Math.random() * 500;
+        const delay = this._mockDelayMs > 0 ? this._mockDelayMs : 500 + Math.random() * 500;
         await this.sleep(delay);
         
         // 检查是否模拟失败
@@ -230,6 +239,11 @@ class AdServiceManager {
     setMockFailRate(rate: number): void {
         this._mockFailRate = Math.max(0, Math.min(1, rate));
         console.log(`[AdService] Mock 失败率: ${this._mockFailRate}`);
+    }
+    
+    /** 测试用：>0 时覆盖 Mock 延迟。正式玩法保持 0。 */
+    setMockDelay(ms: number): void {
+        this._mockDelayMs = Math.max(0, ms);
     }
 }
 

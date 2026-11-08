@@ -1,9 +1,10 @@
 v0
-0.15.0-v0-day15
-Day15
+0.21.0-v0-day21
+Day21
 name: 尸潮防线
 engine: Cocos Creator 3.8.x
 design: 720×1280 portrait
 monetization: IAA only (no IAP)
 balance: Day10 locked
-known: Mock ads (empty AD_UNIT_IDS); placeholder art; no Creator/device QA on this VM
+art: pixel v1 (generated sprites; branding placeholders)
+known: Mock ads (empty AD_UNIT_IDS); no Creator/device QA on this VM; human gate still open

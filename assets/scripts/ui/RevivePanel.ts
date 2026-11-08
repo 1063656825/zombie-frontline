@@ -6,6 +6,7 @@
  */
 
 import { _decorator, Component, Node, Label, Graphics, Color, UITransform, Vec3 } from 'cc';
+import { drawPixelPanel, PIXEL_UI } from '../pixel/PixelChrome';
 import { GameData } from '../data/GameData';
 import { AdService, AdSlot } from '../ads/AdService';
 import { AudioService, SfxId } from '../audio/AudioService';
@@ -92,13 +93,7 @@ export class RevivePanel extends Component {
         const panelTransform = panel.addComponent(UITransform);
         panelTransform.setContentSize(400, 320);
         const panelGraphics = panel.addComponent(Graphics);
-        panelGraphics.fillColor = new Color(40, 40, 50, 250);
-        panelGraphics.roundRect(-200, -160, 400, 320, 16);
-        panelGraphics.fill();
-        panelGraphics.strokeColor = new Color(255, 100, 100, 255);
-        panelGraphics.lineWidth = 3;
-        panelGraphics.roundRect(-200, -160, 400, 320, 16);
-        panelGraphics.stroke();
+        drawPixelPanel(panelGraphics, -200, -160, 400, 320, PIXEL_UI.panel, PIXEL_UI.danger);
         
         // 标题
         const titleNode = new Node('Title');
@@ -147,9 +142,7 @@ export class RevivePanel extends Component {
         transform.setContentSize(width, 50);
         
         const graphics = btn.addComponent(Graphics);
-        graphics.fillColor = color;
-        graphics.roundRect(-width / 2, -25, width, 50, 8);
-        graphics.fill();
+        drawPixelPanel(graphics, -width / 2, -25, width, 50, color, PIXEL_UI.hi);
         
         const labelNode = new Node('Label');
         labelNode.parent = btn;
@@ -284,6 +277,7 @@ export class RevivePanel extends Component {
             Analytics.trackAdFail(AdSlot.Revive, result.reason || 'unknown', adContext);
             
             console.log(`[RevivePanel] 广告失败: ${result.reason}`);
+            AdService.reset();
             if (this.reviveBtnLabel) {
                 this.reviveBtnLabel.string = '看完视频，站起来再打一波';
             }

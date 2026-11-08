@@ -7,6 +7,7 @@
  */
 
 import { _decorator, Component, Node, Label, Graphics, Color, UITransform } from 'cc';
+import { drawPixelPanel, PIXEL_UI } from '../pixel/PixelChrome';
 import { GameData } from '../data/GameData';
 import { AdService, AdSlot } from '../ads/AdService';
 import { AudioService, SfxId } from '../audio/AudioService';
@@ -95,9 +96,7 @@ export class SettlePanel extends Component {
         const panelTransform = panel.addComponent(UITransform);
         panelTransform.setContentSize(400, 350);
         const panelGraphics = panel.addComponent(Graphics);
-        panelGraphics.fillColor = new Color(30, 35, 45, 250);
-        panelGraphics.roundRect(-200, -175, 400, 350, 16);
-        panelGraphics.fill();
+        drawPixelPanel(panelGraphics, -200, -175, 400, 350, PIXEL_UI.panel, PIXEL_UI.accent);
         
         // 标题
         const titleNode = new Node('Title');
@@ -137,9 +136,7 @@ export class SettlePanel extends Component {
         doubleBtnTransform.setContentSize(300, 50);
         
         const doubleBtnGraphics = this._doubleBtn.addComponent(Graphics);
-        doubleBtnGraphics.fillColor = new Color(255, 180, 0, 255);
-        doubleBtnGraphics.roundRect(-150, -25, 300, 50, 8);
-        doubleBtnGraphics.fill();
+        drawPixelPanel(doubleBtnGraphics, -150, -25, 300, 50, PIXEL_UI.accent, PIXEL_UI.hi);
         
         const doubleBtnLabelNode = new Node('Label');
         doubleBtnLabelNode.parent = this._doubleBtn;
@@ -158,9 +155,7 @@ export class SettlePanel extends Component {
         btnTransform.setContentSize(200, 50);
         
         const btnGraphics = this.confirmBtn.addComponent(Graphics);
-        btnGraphics.fillColor = new Color(50, 150, 200, 255);
-        btnGraphics.roundRect(-100, -25, 200, 50, 8);
-        btnGraphics.fill();
+        drawPixelPanel(btnGraphics, -100, -25, 200, 50, new Color(58, 106, 170, 255), PIXEL_UI.hi);
         
         const btnLabelNode = new Node('Label');
         btnLabelNode.parent = this.confirmBtn;
@@ -288,14 +283,7 @@ export class SettlePanel extends Component {
         if (panel) {
             const graphics = panel.getComponent(Graphics);
             if (graphics) {
-                graphics.clear();
-                graphics.fillColor = new Color(30, 35, 45, 250);
-                graphics.roundRect(-200, -175, 400, 350, 16);
-                graphics.fill();
-                graphics.strokeColor = color;
-                graphics.lineWidth = 3;
-                graphics.roundRect(-200, -175, 400, 350, 16);
-                graphics.stroke();
+                drawPixelPanel(graphics, -200, -175, 400, 350, PIXEL_UI.panel, color);
             }
         }
     }
@@ -358,29 +346,22 @@ export class SettlePanel extends Component {
             return;
         }
         
-        this._doubleState = DoubleRewardState.Claimed;
-        
         const adContext = { level_id: this._levelId, wave_reached: this._waveReached };
         
         if (success) {
-            // Day12: 埋点 - 广告完成
+            this._doubleState = DoubleRewardState.Claimed;
             Analytics.trackAdComplete(AdSlot.SettleDouble, adContext);
-            
-            // 额外发放等额残骸
             GameData.addScrap(this._baseScrap);
             this._totalScrap = this._baseScrap * 2;
-            
-            // 更新显示
             if (this.scrapLabel) {
                 this.scrapLabel.string = `获得残骸: +${this._totalScrap} (已双倍)`;
             }
-            
-            console.log(`[SettlePanel] 模拟广告成功，额外获得: +${this._baseScrap}，总计: ${this._totalScrap}`);
+            console.log(`[SettlePanel] 广告成功，额外获得: +${this._baseScrap}，总计: ${this._totalScrap}`);
         } else {
-            // Day12: 埋点 - 广告失败
+            this._doubleState = DoubleRewardState.Idle;
             Analytics.trackAdFail(AdSlot.SettleDouble, reason || 'unknown', adContext);
-            
-            console.log('[SettlePanel] 模拟广告失败/取消');
+            console.log('[SettlePanel] 广告失败/取消，可重试');
+            AdService.reset();
         }
         
         this.updateDoubleButton();
@@ -403,30 +384,21 @@ export class SettlePanel extends Component {
             case DoubleRewardState.Idle:
                 this._doubleBtnLabel.string = '看完视频，残骸翻倍带走';
                 if (graphics) {
-                    graphics.clear();
-                    graphics.fillColor = new Color(255, 180, 0, 255);
-                    graphics.roundRect(-150, -25, 300, 50, 8);
-                    graphics.fill();
+                    drawPixelPanel(graphics, -150, -25, 300, 50, PIXEL_UI.accent, PIXEL_UI.hi);
                 }
                 break;
                 
             case DoubleRewardState.Watching:
                 this._doubleBtnLabel.string = '加载中...';
                 if (graphics) {
-                    graphics.clear();
-                    graphics.fillColor = new Color(150, 150, 150, 255);
-                    graphics.roundRect(-150, -25, 300, 50, 8);
-                    graphics.fill();
+                    drawPixelPanel(graphics, -150, -25, 300, 50, new Color(90, 90, 96, 255), PIXEL_UI.muted);
                 }
                 break;
                 
             case DoubleRewardState.Claimed:
-                this._doubleBtnLabel.string = '✓ 已领取双倍';
+                this._doubleBtnLabel.string = '已领取双倍';
                 if (graphics) {
-                    graphics.clear();
-                    graphics.fillColor = new Color(100, 150, 100, 255);
-                    graphics.roundRect(-150, -25, 300, 50, 8);
-                    graphics.fill();
+                    drawPixelPanel(graphics, -150, -25, 300, 50, PIXEL_UI.ok, PIXEL_UI.hi);
                 }
                 break;
         }

@@ -478,7 +478,7 @@
   },
   {
     "__type__": "cc.Label",
-    "_string": "v0.15.0",
+    "_string": "v0.21.0",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
     "_actualFontSize": 20,

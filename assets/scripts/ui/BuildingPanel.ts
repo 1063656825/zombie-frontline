@@ -8,7 +8,7 @@ import { _decorator, Component, Node, Label, Color, Graphics, UITransform, Event
 import { BuildingType, BuildingLevel, getBuildingConfig, BUILDING_NAMES } from '../battle/BuildingConfig';
 import { GameData, GameEvents, EVENT_DP_CHANGED } from '../data/GameData';
 import { BattleState, BattleEvents, EVENT_STATE_CHANGED } from '../battle/BattleFlow';
-import { PLACEHOLDER_COLORS } from './PlaceholderGraphics';
+import { drawPixelPanel, PIXEL_UI } from '../pixel/PixelChrome';
 
 const { ccclass, property } = _decorator;
 
@@ -179,30 +179,16 @@ export class BuildingPanel extends Component {
                 bgColor = new Color(100, 100, 100, baseAlpha);
         }
         
-        // 圆角矩形背景
-        graphics.fillColor = bgColor;
-        graphics.roundRect(
-            -this.BTN_WIDTH / 2, 
-            -this.BTN_HEIGHT / 2, 
-            this.BTN_WIDTH, 
-            this.BTN_HEIGHT, 
-            8
+        const border = isEnabled ? PIXEL_UI.accent : PIXEL_UI.muted;
+        drawPixelPanel(
+            graphics,
+            -this.BTN_WIDTH / 2,
+            -this.BTN_HEIGHT / 2,
+            this.BTN_WIDTH,
+            this.BTN_HEIGHT,
+            bgColor,
+            border
         );
-        graphics.fill();
-        
-        // 边框
-        graphics.strokeColor = isEnabled 
-            ? new Color(255, 255, 255, 200) 
-            : new Color(100, 100, 100, 150);
-        graphics.lineWidth = 2;
-        graphics.roundRect(
-            -this.BTN_WIDTH / 2, 
-            -this.BTN_HEIGHT / 2, 
-            this.BTN_WIDTH, 
-            this.BTN_HEIGHT, 
-            8
-        );
-        graphics.stroke();
     }
     
     /**

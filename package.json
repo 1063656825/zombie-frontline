@@ -2,15 +2,18 @@
   "name": "zombie-frontline",
   "displayName": "尸潮防线",
   "uuid": "b5e7c8f0-2d3a-4b5e-9f8c-1a2b3c4d5e6f",
-  "version": "0.15.0",
-  "description": "竖屏轻塔防微信小游戏 - 波间落子 + 波内自动割草（v0 / Day15 提审前代码收口）",
+  "version": "0.21.0",
+  "description": "竖屏轻塔防微信小游戏 - 波间落子 + 波内自动割草（v0 / Day21 像素 UI 与提审代码收口）",
   "author": "Developer",
   "main": "index.js",
   "type": "3d",
   "creator": {
     "version": "3.8.0"
   },
-  "scripts": {},
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit"
+  },
   "devDependencies": {
     "@types/node": "^26.6.6",
     "typescript": "^7.0.2",

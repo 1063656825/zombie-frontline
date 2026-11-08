@@ -48,13 +48,17 @@
 - `flashEnemy` / 击退 tween 仍可能每击 `Color.clone` / `Vec3`（HitEffects 纯函数，未改手感）。
 - `findNearestEnemy` 仍线性扫全体敌人（数量 < 50 可接受）。
 - `screenShake` / `screenFlashRed` 失败时仍临时建节点。
-- Graphics 占位每帧 `setPosition`；真机 Fillrate 取决于分辨率，与对象池无关。
+- 像素精灵用 SpriteFrame（NEAREST）或 Graphics 方格回退；敌人节点仍走 Day13 对象池 `restyleEnemy`，不要改回 destroy。
+- 网格只在落子/高亮/合成时重绘像素格，不是每帧热路径。
 - 对象池预热值（12/6/8）按当前波规模估计，若 L2 同时在场远超 12 会扩容；扩容本身有一次性分配。
 
-## Creator QA checklist（人测）
+## Creator QA checklist（人测，未勾）
+
+测量叠层：预览加 `?zf_debug=1`（正式包默认关）。
 
 - [ ] L1 W0–W5 完整打完，无报错、无残留可见敌人
-- [ ] 失败复活重打当前波：旧怪消失，新怪从池复用
+- [ ] 失败复活重打当前波：旧怪消失，新怪从池复用（像素皮肤 restyle，不是新 destroy）
 - [ ] 返回大厅再进 Battle：无上一局 VFX/敌人
-- [ ] Profiler：高潮波帧率；对比本改动前若有存档
-- [ ] 微信开发者工具 / 真机：30fps 目标、内存曲线不持续上涨
+- [ ] Profiler：高潮波尽量 ~30fps
+- [ ] 微信开发者工具 / 真机：内存曲线不持续上涨
+- [ ] 关 Debug 后玩家画面无 FPS 数字、无「测试」字样

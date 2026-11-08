@@ -260,7 +260,7 @@ def build_boot():
     status_lbl = b.label(status, "正在加载...", font=30, line=40, w=720, h=50)
 
     version = b.add_node("VersionLabel", canvas, (0, -420, 0))
-    ver_lbl = b.label(version, "v0.15.0", font=20, line=30, col=(180, 180, 180, 255), w=720, h=40)
+    ver_lbl = b.label(version, "v0.21.0", font=20, line=30, col=(180, 180, 180, 255), w=720, h=40)
 
     b.script(canvas, "BootScene", {
         "statusLabel": ref(status_lbl),
@@ -440,6 +440,10 @@ def main():
     extra = [
         "assets/scripts/core/BootGate.ts",
         "assets/scripts/core/LegalContent.ts",
+        "assets/scripts/pixel/PixelMaps.ts",
+        "assets/scripts/pixel/PixelDecode.ts",
+        "assets/scripts/pixel/PixelBlit.ts",
+        "assets/scripts/pixel/PixelChrome.ts",
         "assets/scripts/core/DebugFlags.ts",
         "assets/scripts/core/DebugOverlay.ts",
         "assets/scripts/core/SceneManager.ts",

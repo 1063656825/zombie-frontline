@@ -32,6 +32,9 @@ npm-debug.log*
 *~
 *.bak
 
+# Local git bundles / preview artifacts
+artifacts/
+
 # Python
 **/__pycache__/
 *.py[cod]

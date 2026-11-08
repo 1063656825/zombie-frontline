@@ -5,6 +5,7 @@
 
 import { profiler } from 'cc';
 import { DEBUG_STORAGE_KEY, isDebugOverlayEnabled } from './DebugFlags';
+import { Analytics } from '../analytics/Analytics';
 
 function readStorage(key: string): string | null {
     try {
@@ -37,6 +38,13 @@ export function applyDebugOverlayPolicy(): boolean {
         if (enabled) {
             profiler.showStats();
             console.log(`[DebugOverlay] 性能叠层已打开（${DEBUG_STORAGE_KEY} 或 ?zf_debug=1）`);
+            try {
+                (globalThis as { zfDumpAnalytics?: () => string | null }).zfDumpAnalytics =
+                    () => Analytics.dumpSessionSummary({ force: true });
+                console.log('[DebugOverlay] 控制台执行 zfDumpAnalytics() 可导出本局 ANALYTICS 摘要');
+            } catch {
+                /* ignore */
+            }
         } else {
             profiler.hideStats();
         }

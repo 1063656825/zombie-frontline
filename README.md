@@ -2,17 +2,19 @@
 
 > 竖屏轻塔防：波间落子 + 波内自动割草
 
-**v0 / Day15** — 提审前代码收口（隐私/协议、Debug 默认关、广告配置说明）。玩法与数值仍为 Day14 冻包 / Day10 锁表。版本见 `VERSION`（`0.15.0-v0-day15`）。无 IAP。
+**v0 / Day21** — 像素 UI v1 + 提审代码收口。玩法与数值仍为 Day14 冻包 / Day10 锁表。版本见 `VERSION`（`0.21.0-v0-day21`）。无 IAP。AppID / adUnitId 仍空（Mock）。
 
 | 文档 | 用途 |
 |------|------|
 | `SUBMISSION.md` | 微信小游戏提审清单（构建、合规、素材、盲测门禁） |
-| `CREATOR_QA.md` | Day1–15 Creator / 微信开发者工具可勾选验收 |
+| `CREATOR_QA.md` | Day1–21 Creator / 微信开发者工具可勾选验收（人测勿勾未做项） |
+| `LOCAL_SETUP.md` | 本机 Creator → 微信开发者工具构建 |
+| `BLIND_TEST.md` | ≥10 人盲测手填表（空模板） |
 | `PERFORMANCE.md` | Day13 对象池与真机帧率目标 |
 | `ANALYTICS.md` | 埋点与验证指标 |
 | `BALANCE.md` | Day10 平衡表（勿在冻包后顺手改） |
 
-**已知限制：** 广告默认 Mock（`AdService.ts` `AD_UNIT_IDS` 为空）；美术为色块占位；本开发环境 **无 Creator、无真机**，通关/广告/30fps **均未在此 VM 跑过**，必须以 `CREATOR_QA.md` 人测为准。
+**已知限制：** 广告默认 Mock（`AdService.ts` `AD_UNIT_IDS` 为空）；局内为程序生成像素精灵，品牌图为占位；本开发环境 **无 Creator、无真机**，通关/广告/30fps **均未在此 VM 跑过**，必须以 `CREATOR_QA.md` 人测为准。
 
 ## 项目简介
 
@@ -1707,10 +1709,21 @@ Boot / Lobby / Battle 启动时 `profiler.hideStats()`。需要时：预览 URL 
 
 ---
 
+## Day16–21 完成内容（代码/文档）
+
+- **像素 UI v1**：`assets/textures/pixel/` 精灵 + `PixelBlit`；战斗建筑/敌人/据点/格子；大厅/Boot/结算/复活/补给块状面板。对象池仍 `restyleEnemy`。
+- **构建**：`LOCAL_SETUP.md`；`builder.json` AppID 仍 `""`。
+- **广告**：三槽空 Mock；失败回 Idle / `AdService.reset`。
+- **素材占位**：`assets/branding/` 图标/分享/启动图，SUBMISSION 标明可替换。
+- **盲测工具**：Debug 下 `zfDumpAnalytics()`；`BLIND_TEST.md` 空表。
+- **未做人的**：真机、真 AppID、真广告位、≥10 盲测、商标粗查、上传提审。本 VM 无 Creator，不能代替预览。
+
+---
+
 ## 联系方式
 
 如有问题，请联系项目负责人。
 
 ---
 
-*Last updated: Day15 提审前代码收口*
+*Last updated: Day21 像素 UI 与提审代码收口*

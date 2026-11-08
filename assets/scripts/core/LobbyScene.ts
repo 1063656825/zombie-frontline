@@ -6,6 +6,7 @@
  */
 
 import { _decorator, Component, Label, director, Node, Graphics, Color, UITransform, SceneAsset, assetManager } from 'cc';
+import { drawPixelPanel, PIXEL_UI } from '../pixel/PixelChrome';
 import { GameData, GameEvents, EVENT_SCRAP_CHANGED } from '../data/GameData';
 import { 
     MetaData, 
@@ -70,6 +71,8 @@ export class LobbyScene extends Component {
         console.log('[LobbyScene] 大厅场景开始');
         applyDebugOverlayPolicy();
         
+        this.styleLobbyChrome();
+        
         // 创建升级 UI
         this.createUpgradeUI();
         
@@ -79,6 +82,8 @@ export class LobbyScene extends Component {
         // 绑定按钮事件
         if (this.startBattleBtn) {
             this.startBattleBtn.on(Node.EventType.TOUCH_END, this.onStartBattle, this);
+            const g = this.startBattleBtn.getComponent(Graphics) || this.startBattleBtn.addComponent(Graphics);
+            drawPixelPanel(g, -130, -40, 260, 80, PIXEL_UI.ok, PIXEL_UI.accent);
         }
         
         // 监听残骸变化
@@ -94,6 +99,28 @@ export class LobbyScene extends Component {
     
     onDestroy() {
         GameEvents.off(EVENT_SCRAP_CHANGED, this.onScrapChanged, this);
+    }
+    
+    /** 标题 / 残骸做成与按钮同一套像素框 */
+    private styleLobbyChrome() {
+        const title = this.node.getChildByName('Title');
+        if (title) {
+            const g = title.getComponent(Graphics) || title.addComponent(Graphics);
+            drawPixelPanel(g, -220, -40, 440, 80, PIXEL_UI.panel, PIXEL_UI.accent);
+            const label = title.getComponent(Label);
+            if (label) {
+                label.color = PIXEL_UI.text;
+            }
+        }
+        const scrap = this.node.getChildByName('ScrapLabel');
+        if (scrap) {
+            const g = scrap.getComponent(Graphics) || scrap.addComponent(Graphics);
+            drawPixelPanel(g, -160, -28, 320, 56, PIXEL_UI.panel, PIXEL_UI.hi);
+            const label = scrap.getComponent(Label);
+            if (label) {
+                label.color = PIXEL_UI.text;
+            }
+        }
     }
     
     /**
@@ -118,13 +145,7 @@ export class LobbyScene extends Component {
         
         // 背景
         const bg = container.addComponent(Graphics);
-        bg.fillColor = new Color(40, 45, 55, 230);
-        bg.roundRect(-320, -40, 640, 80, 10);
-        bg.fill();
-        bg.strokeColor = new Color(100, 100, 120, 200);
-        bg.lineWidth = 2;
-        bg.roundRect(-320, -40, 640, 80, 10);
-        bg.stroke();
+        drawPixelPanel(bg, -320, -40, 640, 80, PIXEL_UI.panel, PIXEL_UI.hi);
         
         const transform = container.addComponent(UITransform);
         transform.setContentSize(640, 80);
@@ -177,9 +198,7 @@ export class LobbyScene extends Component {
         btnTransform.setContentSize(100, 50);
         
         const btnGraphics = button.addComponent(Graphics);
-        btnGraphics.fillColor = new Color(50, 150, 50, 255);
-        btnGraphics.roundRect(-50, -25, 100, 50, 8);
-        btnGraphics.fill();
+        drawPixelPanel(btnGraphics, -50, -25, 100, 50, PIXEL_UI.ok, PIXEL_UI.accent);
         
         const btnLabelNode = new Node('Label');
         btnLabelNode.parent = button;
@@ -258,16 +277,10 @@ export class LobbyScene extends Component {
         // 按钮状态
         const btnGraphics = row.button.getComponent(Graphics);
         if (btnGraphics) {
-            btnGraphics.clear();
-            if (isMaxLevel) {
-                btnGraphics.fillColor = new Color(80, 80, 80, 255);
-            } else if (canAfford) {
-                btnGraphics.fillColor = new Color(50, 150, 50, 255);
-            } else {
-                btnGraphics.fillColor = new Color(100, 80, 80, 255);
-            }
-            btnGraphics.roundRect(-50, -25, 100, 50, 8);
-            btnGraphics.fill();
+            const fill = isMaxLevel
+                ? new Color(70, 70, 74, 255)
+                : canAfford ? PIXEL_UI.ok : PIXEL_UI.danger;
+            drawPixelPanel(btnGraphics, -50, -25, 100, 50, fill, PIXEL_UI.hi);
         }
         
         row.buttonLabel.string = isMaxLevel ? '满级' : '升级';
@@ -430,27 +443,11 @@ export class LobbyScene extends Component {
             if (graphics) {
                 graphics.clear();
                 
-                if (!isUnlocked) {
-                    // 锁定
-                    graphics.fillColor = new Color(60, 60, 60, 200);
-                } else if (isSelected) {
-                    // 选中
-                    graphics.fillColor = new Color(50, 120, 180, 255);
-                } else {
-                    // 未选中
-                    graphics.fillColor = new Color(70, 80, 90, 230);
-                }
-                
-                graphics.roundRect(-90, -40, 180, 80, 10);
-                graphics.fill();
-                
-                // 边框
-                graphics.strokeColor = isSelected 
-                    ? new Color(100, 200, 255, 255)
-                    : new Color(100, 100, 100, 200);
-                graphics.lineWidth = isSelected ? 3 : 1;
-                graphics.roundRect(-90, -40, 180, 80, 10);
-                graphics.stroke();
+                const fill = !isUnlocked
+                    ? new Color(48, 44, 52, 230)
+                    : isSelected ? new Color(58, 106, 170, 255) : PIXEL_UI.panelAlt;
+                const border = isSelected ? PIXEL_UI.accent : PIXEL_UI.hi;
+                drawPixelPanel(graphics, -90, -40, 180, 80, fill, border);
             }
             
             // 锁定图标
@@ -475,13 +472,7 @@ export class LobbyScene extends Component {
             tf.setContentSize(200, 48);
             
             const g = button.addComponent(Graphics);
-            g.fillColor = new Color(36, 42, 58, 230);
-            g.roundRect(-100, -24, 200, 48, 8);
-            g.fill();
-            g.strokeColor = new Color(120, 140, 170, 200);
-            g.lineWidth = 1;
-            g.roundRect(-100, -24, 200, 48, 8);
-            g.stroke();
+            drawPixelPanel(g, -100, -24, 200, 48, PIXEL_UI.panel, PIXEL_UI.hi);
             
             const labelNode = new Node('Label');
             labelNode.parent = button;

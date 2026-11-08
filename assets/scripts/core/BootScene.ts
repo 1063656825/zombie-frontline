@@ -4,7 +4,8 @@
  * Creator 3.8.6: loadScene(name, onLaunched?, onUnloaded?) — 不是 (onBefore, onError)
  */
 
-import { _decorator, Component, Label, director, assetManager, SceneAsset } from 'cc';
+import { _decorator, Component, Label, director, assetManager, SceneAsset, Node, Graphics, UITransform } from 'cc';
+import { drawPixelBar, drawPixelPanel, PIXEL_UI } from '../pixel/PixelChrome';
 import { GameData } from '../data/GameData';
 import { SCENE_LOBBY } from './SceneManager';
 import {
@@ -38,15 +39,17 @@ export class BootScene extends Component {
     private _isReady = false;
     private _jumpStarted = false;
     private _uuidLoadStarted = false;
+    private _bootBarGraphics: Graphics | null = null;
     
     start() {
         console.log('[BootScene] 启动场景开始');
         applyDebugOverlayPolicy();
         
         if (this.versionLabel) {
-            this.versionLabel.string = '尸潮防线 v0.15.0';
+            this.versionLabel.string = '尸潮防线 v0.21.0';
         }
         
+        this.createBootChrome();
         this.setStatus('正在初始化...');
         this.initGame();
         
@@ -74,9 +77,37 @@ export class BootScene extends Component {
             return;
         }
         this._bootTimer += dt;
+        if (this._bootBarGraphics) {
+            drawPixelBar(this._bootBarGraphics, -160, -12, 320, 24, this._bootTimer / this.MIN_BOOT_TIME);
+        }
         if (shouldJumpFromBoot(this._isReady, this._jumpStarted, this._bootTimer, this.MIN_BOOT_TIME)) {
             this.gotoLobby();
         }
+    }
+    
+    private createBootChrome() {
+        const title = this.node.getChildByName('Title');
+        if (title) {
+            const tg = title.getComponent(Graphics) || title.addComponent(Graphics);
+            drawPixelPanel(tg, -220, -40, 440, 80, PIXEL_UI.panel, PIXEL_UI.accent);
+            const label = title.getComponent(Label);
+            if (label) {
+                label.color = PIXEL_UI.text;
+            }
+        }
+        const bar = new Node('BootBar');
+        bar.parent = this.node;
+        bar.setPosition(0, -80, 0);
+        bar.addComponent(UITransform).setContentSize(320, 24);
+        this._bootBarGraphics = bar.addComponent(Graphics);
+        drawPixelBar(this._bootBarGraphics, -160, -12, 320, 24, 0);
+        
+        const frame = new Node('BootFrame');
+        frame.parent = this.node;
+        frame.setPosition(0, 40, 0);
+        frame.addComponent(UITransform).setContentSize(520, 120);
+        const g = frame.addComponent(Graphics);
+        drawPixelPanel(g, -260, -60, 520, 120, PIXEL_UI.panel, PIXEL_UI.accent);
     }
     
     private setStatus(text: string) {

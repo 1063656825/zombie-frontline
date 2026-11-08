@@ -12,6 +12,7 @@
 import { isWeChat } from '../platform/WxBridge';
 import { LevelId } from '../battle/WaveConfig';
 import { AdSlot } from '../ads/AdService';
+import { isDebugOverlayEnabled, DEBUG_STORAGE_KEY } from '../core/DebugFlags';
 
 // ============================================================
 // 事件类型定义
@@ -480,21 +481,59 @@ class AnalyticsService {
      * 打印会话摘要
      */
     printSummary(): void {
-        const stats = this._sessionStats;
-        console.log('=== Analytics Session Summary ===');
-        console.log(`Runs: ${stats.runCount} (Win: ${stats.runWins}, Lose: ${stats.runLoses})`);
-        console.log(`Merge: ${stats.mergeSuccesses}/${stats.mergeAttempts} attempts, ${stats.runsWithMerge} runs with merge`);
-        console.log(`Revives: ${stats.revivesUsed}`);
-        console.log(`Ads:`);
+        console.log(this.formatSessionSummary());
+    }
+    
+    formatSessionSummary(stats: SessionStats = this._sessionStats): string {
+        const lines = [
+            '=== Analytics Session Summary ===',
+            `Runs: ${stats.runCount} (Win: ${stats.runWins}, Lose: ${stats.runLoses})`,
+            `Merge: ${stats.mergeSuccesses}/${stats.mergeAttempts} attempts, ${stats.runsWithMerge} runs with merge`,
+            `Revives: ${stats.revivesUsed}`
+        ];
+        const waveKeys = Object.keys(stats.waveAttempts).sort();
+        for (const key of waveKeys) {
+            const att = stats.waveAttempts[key] || 0;
+            const fail = stats.waveFails[key] || 0;
+            const clear = stats.waveClears[key] || 0;
+            lines.push(`Wave ${key}: try ${att} clear ${clear} fail ${fail}`);
+        }
+        lines.push('Ads:');
         for (const slot of Object.values(AdSlot)) {
             const shows = stats.adShows[slot] || 0;
             const completes = stats.adCompletes[slot] || 0;
             const fails = stats.adFails[slot] || 0;
-            if (shows > 0) {
-                console.log(`  ${slot}: ${shows} shows, ${completes} complete, ${fails} fail`);
+            if (shows > 0 || completes > 0 || fails > 0) {
+                lines.push(`  ${slot}: ${shows} shows, ${completes} complete, ${fails} fail`);
             }
         }
-        console.log('=================================');
+        lines.push('=================================');
+        return lines.join('\n');
+    }
+    
+    /**
+     * Debug 下导出本局摘要。正式包默认关。
+     * 预览：?zf_debug=1 或 localStorage zombie_frontline_debug=1，控制台执行 zfDumpAnalytics()
+     */
+    dumpSessionSummary(opts?: { force?: boolean }): string | null {
+        const href = typeof location !== 'undefined' ? location.href : '';
+        const allowed = opts?.force === true || isDebugOverlayEnabled({
+            href,
+            storageGet: (k) => {
+                try {
+                    return typeof localStorage !== 'undefined' ? localStorage.getItem(k) : null;
+                } catch {
+                    return null;
+                }
+            }
+        });
+        if (!allowed) {
+            console.warn(`[Analytics] dump 已关闭（正式包默认）。打开 Debug 后可用。键 ${DEBUG_STORAGE_KEY}`);
+            return null;
+        }
+        const text = this.formatSessionSummary();
+        console.log(text);
+        return text;
     }
 }
 

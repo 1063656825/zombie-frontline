@@ -11,6 +11,7 @@ import { BuildingType, BuildingLevel, getBuildingConfig, canMerge, BuildingStats
 import { GameData } from '../data/GameData';
 import { BattleState } from './BattleFlow';
 import { PlaceholderGraphics, PLACEHOLDER_COLORS } from '../ui/PlaceholderGraphics';
+import { PIXEL_PALETTE, PIXEL_SPRITES } from '../pixel/PixelMaps';
 import { MetaData, rollMergeRefund } from '../data/MetaData';
 import { AudioService, SfxId } from '../audio/AudioService';
 import { Analytics } from '../analytics/Analytics';
@@ -179,32 +180,16 @@ export class GridBuild extends Component {
         
         const x = cell.worldPos.x - this.CELL_SIZE / 2;
         const y = cell.worldPos.y - this.CELL_SIZE / 2;
-        const padding = 2;
-        
-        // 根据状态选择颜色
-        let fillColor: Color;
+        const g = this._gridGraphics;
+        const sprite = cell.isValid ? 'cell_ok' : 'cell_no';
+        const alpha = cell.isOccupied ? 0.45 : 1;
+        blitPixelTile(g, x, y, this.CELL_SIZE, sprite, alpha);
         if (isHighlighted && cell.isValid && !cell.isOccupied) {
-            fillColor = PLACEHOLDER_COLORS.GRID_HIGHLIGHT;
-        } else if (cell.isValid) {
-            fillColor = cell.isOccupied 
-                ? new Color(80, 80, 80, 60) 
-                : PLACEHOLDER_COLORS.GRID_VALID;
-        } else {
-            fillColor = PLACEHOLDER_COLORS.GRID_INVALID;
+            g.fillColor = PLACEHOLDER_COLORS.GRID_HIGHLIGHT;
+            g.rect(x + 4, y + this.CELL_SIZE - 8, this.CELL_SIZE - 8, 4);
+            g.fill();
+            drawChunkyFrame(g, x, y, this.CELL_SIZE, PLACEHOLDER_COLORS.GRID_HIGHLIGHT, 4);
         }
-        
-        // 填充
-        this._gridGraphics.fillColor = fillColor;
-        this._gridGraphics.rect(x + padding, y + padding, this.CELL_SIZE - padding * 2, this.CELL_SIZE - padding * 2);
-        this._gridGraphics.fill();
-        
-        // 边框
-        this._gridGraphics.strokeColor = isHighlighted 
-            ? new Color(255, 255, 100, 200) 
-            : new Color(255, 255, 255, 80);
-        this._gridGraphics.lineWidth = isHighlighted ? 2 : 1;
-        this._gridGraphics.rect(x, y, this.CELL_SIZE, this.CELL_SIZE);
-        this._gridGraphics.stroke();
     }
     
     /**
@@ -640,33 +625,14 @@ export class GridBuild extends Component {
         
         const x = cell.worldPos.x - this.CELL_SIZE / 2;
         const y = cell.worldPos.y - this.CELL_SIZE / 2;
-        const padding = 2;
-        
-        let fillColor: Color;
+        const g = this._gridGraphics;
+        const sprite = cell.isValid ? 'cell_ok' : 'cell_no';
+        blitPixelTile(g, x, y, this.CELL_SIZE, sprite, cell.isOccupied ? 0.45 : 1);
         if (isActive) {
-            fillColor = new Color(100, 255, 100, 180);  // 激活的合成目标
+            drawChunkyFrame(g, x, y, this.CELL_SIZE, new Color(100, 255, 100, 255), 4);
         } else if (isMergeTarget) {
-            fillColor = new Color(255, 255, 100, 120);  // 可合成目标
-        } else if (cell.isValid) {
-            fillColor = cell.isOccupied 
-                ? new Color(80, 80, 80, 60) 
-                : PLACEHOLDER_COLORS.GRID_VALID;
-        } else {
-            fillColor = PLACEHOLDER_COLORS.GRID_INVALID;
+            drawChunkyFrame(g, x, y, this.CELL_SIZE, new Color(255, 255, 100, 255), 4);
         }
-        
-        this._gridGraphics.fillColor = fillColor;
-        this._gridGraphics.rect(x + padding, y + padding, this.CELL_SIZE - padding * 2, this.CELL_SIZE - padding * 2);
-        this._gridGraphics.fill();
-        
-        this._gridGraphics.strokeColor = isActive 
-            ? new Color(100, 255, 100, 255)
-            : isMergeTarget 
-                ? new Color(255, 255, 100, 255) 
-                : new Color(255, 255, 255, 80);
-        this._gridGraphics.lineWidth = isActive ? 3 : isMergeTarget ? 2 : 1;
-        this._gridGraphics.rect(x, y, this.CELL_SIZE, this.CELL_SIZE);
-        this._gridGraphics.stroke();
     }
     
     /**
@@ -873,4 +839,53 @@ export class GridBuild extends Component {
         this._buildingCacheDirty = true;
         console.log('[GridBuild] 已清空所有建筑');
     }
+}
+
+function blitPixelTile(
+    g: Graphics,
+    x: number,
+    y: number,
+    size: number,
+    spriteName: string,
+    alphaMul: number
+) {
+    const rows = PIXEL_SPRITES[spriteName];
+    if (!rows || rows.length === 0) {
+        return;
+    }
+    const h = rows.length;
+    const w = rows[0].length;
+    const px = size / w;
+    const py = size / h;
+    g.fillColor = new Color(18, 14, 16, 220);
+    g.rect(x, y, size, size);
+    g.fill();
+    for (let iy = 0; iy < h; iy++) {
+        const row = rows[iy];
+        for (let ix = 0; ix < w; ix++) {
+            const packed = PIXEL_PALETTE[row[ix]];
+            if (packed == null) {
+                continue;
+            }
+            const a = Math.max(0, Math.min(255, Math.floor((packed & 0xff) * alphaMul)));
+            if (a === 0) {
+                continue;
+            }
+            g.fillColor = new Color((packed >>> 24) & 0xff, (packed >>> 16) & 0xff, (packed >>> 8) & 0xff, a);
+            g.rect(x + ix * px, y + (h - 1 - iy) * py, px, py);
+            g.fill();
+        }
+    }
+}
+
+function drawChunkyFrame(g: Graphics, x: number, y: number, size: number, color: Color, t: number) {
+    g.fillColor = color;
+    g.rect(x, y, size, t);
+    g.fill();
+    g.rect(x, y + size - t, size, t);
+    g.fill();
+    g.rect(x, y, t, size);
+    g.fill();
+    g.rect(x + size - t, y, t, size);
+    g.fill();
 }

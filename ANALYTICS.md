@@ -121,6 +121,16 @@ Analytics.resetSession();
 
 ---
 
+## Debug 导出本局摘要（Day21）
+
+正式包默认关。打开 Debug 后，打完一局在控制台执行 `zfDumpAnalytics()`（或 `Analytics.dumpSessionSummary({ force: true })`）。
+
+打开方式与性能叠层相同：预览 URL `?zf_debug=1`，或 `localStorage.setItem('zombie_frontline_debug','1')`。不要用引擎 `DEBUG` 宏。
+
+摘要含 Runs / Merge / Revives / 各波 try-clear-fail / 三坑广告 shows-complete-fail，方便填 `BLIND_TEST.md`。未开 Debug 时 dump 返回 `null`。
+
+---
+
 ## 调试
 
 浏览器控制台会输出所有追踪事件：
@@ -158,4 +168,4 @@ Analytics.setWxReportEnabled(true);
 
 ---
 
-*Last updated: Day12*
+*Last updated: Day21（增加 Debug 下 zfDumpAnalytics）*

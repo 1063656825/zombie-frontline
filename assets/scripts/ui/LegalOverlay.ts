@@ -5,6 +5,7 @@
 
 import { Node, Label, Graphics, Color, UITransform, EventTouch, BlockInputEvents } from 'cc';
 import { LegalDocId, getLegalDoc } from '../core/LegalContent';
+import { drawPixelPanel, PIXEL_UI } from '../pixel/PixelChrome';
 
 const VIEW_W = 640;
 const VIEW_H = 820;
@@ -28,9 +29,10 @@ export class LegalOverlay {
         this.root.addComponent(BlockInputEvents);
         
         const bg = this.root.addComponent(Graphics);
-        bg.fillColor = new Color(12, 14, 22, 245);
+        bg.fillColor = new Color(10, 8, 14, 245);
         bg.rect(-360, -640, 720, 1280);
         bg.fill();
+        drawPixelPanel(bg, -340, -600, 680, 1180, PIXEL_UI.bg, PIXEL_UI.accent, 4);
         
         const titleNode = new Node('Title');
         titleNode.parent = this.root;
@@ -74,9 +76,7 @@ export class LegalOverlay {
         const backTf = back.addComponent(UITransform);
         backTf.setContentSize(240, 72);
         const backBg = back.addComponent(Graphics);
-        backBg.fillColor = new Color(50, 120, 180, 255);
-        backBg.roundRect(-120, -36, 240, 72, 10);
-        backBg.fill();
+        drawPixelPanel(backBg, -120, -36, 240, 72, new Color(58, 106, 170, 255), PIXEL_UI.accent);
         const backLblNode = new Node('Label');
         backLblNode.parent = back;
         const backLbl = backLblNode.addComponent(Label);

@@ -1,8 +1,8 @@
 # 微信小游戏提审清单 — 尸潮防线 v0
 
-冻包玩法：Day14。代码收口：Day15。玩法与 Day10 数值已锁。纯 IAA，无支付/商城。
+冻包玩法：Day14。代码收口：Day21（像素 UI v1 + 构建/广告/素材占位/盲测工具）。玩法与 Day10 数值已锁。纯 IAA，无支付/商城。
 
-本 VM **无 Cocos Creator、无微信开发者工具、无真机**。下列构建/提审步骤必须在本机 Creator + 微信后台完成。
+本 VM **无 Cocos Creator、无微信开发者工具、无真机**。构建逐步说明见 `LOCAL_SETUP.md`。下列步骤必须在本机 Creator + 微信后台完成。
 
 ---
 
@@ -26,15 +26,14 @@
 3. 首次打开会生成 `library/`；若提示升级，选升级即可。
 4. 双击 `assets/scenes/Boot.scene`，预览（F5）确认能进大厅。
 
-### 构建微信小游戏（概要）
+### 构建微信小游戏
 
-1. 菜单 **项目 → 构建发布**。
-2. 发布平台选 **微信小游戏**。
-3. 填 **AppID**（与微信公众平台一致）。
-4. 确认竖屏、设计分辨率 720×1280。
-5. 构建输出目录用微信开发者工具打开。
-6. 开发者工具：详情 → 本地设置 → 勾选不校验合法域名（仅调试）；正式提审前配好 request/socket 合法域名（本包当前无服务端，可暂无）。
-7. 预览/真机调试通过后，上传代码 → 提交审核。
+完整步骤与常见坑见 **`LOCAL_SETUP.md`**。摘要：
+
+1. 菜单 **项目 → 构建发布** → 平台 **微信小游戏**。
+2. **AppID**：`settings/v2/packages/builder.json` → `wechatgame.appid` 现为 `""`。提审前填公众平台真实 AppID（构建面板与 json 保持一致）。**不要填假号。**
+3. 竖屏 `portrait`，设计分辨率 **720×1280**（`project.json`）。
+4. 构建输出用微信开发者工具打开 → 真机预览 → 上传 → 提交审核。
 
 微信后台还需配置：类目、标签、简介、截图、年龄分级、隐私协议链接。本仓库 **不包含** 这些后台字段。
 
@@ -60,11 +59,13 @@
 
 **Mock ↔ 真实广告：**
 
-- 配置文件：`assets/scripts/ads/AdService.ts` → `AD_UNIT_IDS`（Day15 三个 key 仍为 `''`，**不要编造 ID**）。
-- 对应关系：`revive` 复活 / `settle_double` 胜利双倍 / `wave_supply` 波间补给。
+- 配置文件：`assets/scripts/ads/AdService.ts` → `AD_UNIT_IDS`（三个 key 仍为 `''`，**不要编造 ID**）。
+- 对应关系：`revive` 复活 / `settle_double` 胜利双倍 / `wave_supply` 波间补给（见 `AD_SLOT_FILL_GUIDE`）。
 - 填写步骤：微信公众平台 → 流量主 → 创建三个激励式视频广告位 → 把真实 `adUnitId` 分别粘进上述三个 key。空字符串则该槽走 Mock（0.5–1s 延迟，默认成功）。
-- 真实路径：微信环境且 adUnitId 非空 → `wx.createRewardedVideoAd`；失败回退 Mock（见 `showRealAd`）。
+- 真实路径：微信环境且 adUnitId 非空 → `wx.createRewardedVideoAd`；`onError` 回退 Mock（见 `showRealAd`）。
 - 不要把测试广告位 ID 提交到正式审核包。
+
+**失败 / 取消回退（代码）：** 进行中重复请求直接 `ok: false`；`showRewarded` 用 try/finally，不会停在 Loading；Mock 失败或取消后 `isLoading === false`；复活按钮恢复原文案、双倍回到 Idle 可再点、补给可重试（均 `AdService.reset()`）。真机取消/失败仍须你在开发者工具勾选。
 
 文案已避免「看广告领钱」类违规承诺，保持「看完视频再打一波 / 残骸翻倍 / 紧急空投 DP」。
 
@@ -80,9 +81,9 @@
 
 ### 适龄与题材（末日丧尸）
 
-- 题材：轻塔防 + 丧尸（占位色块，无写实肢解、无过度血腥）。
+- 题材：轻塔防 + 丧尸（像素风，无写实肢解、无过度血腥）。
 - 建议年龄：**12+** 或按微信类目「战争/射击/冒险」实际要求填写；不要标 3+。
-- 提审说明建议写：卡通/色块表现、无恐怖跳吓、无真实暴力影像。
+- 提审说明建议写：卡通/像素表现、无恐怖跳吓、无真实暴力影像。
 - 若审核要求弱化「尸」字，可考虑副标题或审核版文案，**正式改名需另开一轮**（见商标）。
 
 ### 其它常见驳回点
@@ -97,23 +98,23 @@
 2. 控制台执行 `localStorage.setItem('zombie_frontline_debug','1')` 后刷新（清掉则关）。
 3. 仅本地把 `FORCE_DEBUG_OVERLAY`（`assets/scripts/core/DebugFlags.ts`）改为 `true` 再编译；**不要把 true 提交进正式包**。
 
-不要用引擎 `DEBUG` 宏当开关：Creator 预览里它几乎总是 true。
+打开后控制台可用 `zfDumpAnalytics()` 导出 ANALYTICS 摘要。不要用引擎 `DEBUG` 宏当开关：Creator 预览里它几乎总是 true。
 
 ---
 
 ## 3. 素材待补清单
 
-构建和公众平台都需要，**仓库内目前没有正式美术**：
+构建和公众平台都需要。仓库内是 **像素占位，可替换**，非正式终稿：
 
 | 素材 | 规格参考 | 状态 |
 |------|----------|------|
-| 小游戏图标 | 通常 1024×1024 PNG | 待补 |
-| 启动页 / 加载图 | 按微信后台模板 | 待补 |
-| 审核截图 | 竖屏若干张：大厅、部署、战斗、结算 | 待补（Creator 实机截） |
-| 分享图 | `WxBridge.setupShareAppMessage` 的 `imageUrl` | 待补（可空，审核不友好） |
+| 小游戏图标 | 通常 1024×1024 PNG | **占位可替换**：`assets/branding/icon_1024.png` |
+| 启动页 / 加载图 | 按微信后台模板 | **占位可替换**：`assets/branding/splash_placeholder.png`（720×1280） |
+| 审核截图 | 竖屏若干张：大厅、部署、战斗、结算 | 待补（Creator 实机截，勿用占位当审核图凑数） |
+| 分享图 | `WxBridge.setupShareAppMessage` 的 `imageUrl` | **占位可替换**：`assets/branding/share_placeholder.png` |
 | 商店简介图 | 微信后台 | 待补 |
 
-占位色块可过内测，**正式提审强烈建议至少替换图标与 4 张真实截图**。
+像素局内精灵可过内测观感；**正式提审强烈建议至少替换图标、启动图、分享图与 4 张真实截图**。
 
 ---
 
@@ -131,45 +132,44 @@
 
 ---
 
-## 5. 验收门禁（冻 v0 → 可提审）
+## 5. 验收门禁
 
-必须全部勾上再点「提交审核」：
+### 代码已就绪（仓库内，Day21）
 
-1. **Creator 实机 L1 通关**  
-   - 用 Creator 预览或开发者工具打完 L1 W0–W5，胜利结算、残骸入账、回大厅可见升级。  
-   - 见 `CREATOR_QA.md` 战斗闭环。
+- [x] Boot → Lobby → Battle 跳转代码 + 压缩 class id（人测仍须你本机预览确认）
+- [x] 大厅隐私政策 / 用户协议 Overlay
+- [x] Debug / 性能叠层默认关；`?zf_debug=1` 可开；`zfDumpAnalytics()` 仅 Debug 下导出摘要
+- [x] `AD_UNIT_IDS` 三槽为空走 Mock；取消/失败解除占用（`AdService.reset` / UI 回 Idle）
+- [x] 像素 UI v1（建筑/敌人/据点/格子/大厅/结算面板）；品牌图为**占位**
+- [x] `npx vitest run` / `tsc -p tsconfig.test.json --noEmit`（以当前 tip 为准）
+- [x] 盲测记录表模板 `BLIND_TEST.md`（空表，不是已测）
 
-2. **真机广告位**  
-   - 三个 `AD_UNIT_IDS` 已填正式/提审用激励视频 ID。  
-   - 真机走完：复活完成、双倍到账、补给 +3 DP；取消路径不发卡死。  
-   - Mock 不得作为正式审核包的唯一路径（审核员若点广告应出微信广告，而不是空白延迟）。
+### 人工待做（未完成，勿勾）
 
-3. **≥10 人盲测 + 验证指标**  
-   - 找 ≥10 名未玩过的人各打至少 1 局 L1（可再打 L2）。  
-   - 对照 `ANALYTICS.md` 验证指标表收集（控制台 `[Analytics]` 或会话摘要）：
+1. **Creator 预览 / 真机 L1 通关** — 见 `CREATOR_QA.md`。本 VM 未跑。
+2. **填真实 AppID** — `builder.json` `wechatgame.appid` 与构建面板。
+3. **填三个真实 adUnitId** — `revive` / `settle_double` / `wave_supply`。真机走完复活/双倍/补给；取消不卡死。Mock 不得作为正式审核包唯一路径。
+4. **≥10 人盲测** — 用 `BLIND_TEST.md` 手填。对照 `ANALYTICS.md`。不改 Day10 数值。
+5. **性能** — 真机高潮波 ~30fps。见 `PERFORMANCE.md`。开 Debug 叠层只为测量。
+6. **商标/重名粗查** — 第 4 节步骤；本仓库不做法律结论。
+7. **替换占位图标/启动图/分享图/审核截图** — `assets/branding/` 现为像素占位。
+8. **微信公众平台隐私指引** — 与大厅协议一致，勿勾未使用权限。
+9. **上传代码并提交审核**。
 
-   | 指标 | 事件 | 建议观察 |
-   |------|------|----------|
-   | 首局完成率 | `first_run_complete` / `run_end` | 新用户是否打完或明确失败 |
-   | 合成对局占比 | `run_end.merge_count > 0` | 是否理解 L1+L1 |
-   | 复活点击率 | `ad_complete[revive] / ad_show[revive]` | 失败后是否愿意看广告 |
-   | 双倍点击率 | `ad_complete[settle_double] / ad_show[settle_double]` | 胜利后是否翻倍 |
-   | 波失败率 | `wave_fail / wave_start` 按波 | 哪一波劝退（对照 Day10） |
+广告三坑代码侧 checklist（真机仍待做）：
 
-   盲测 **不改 Day10 数值**；若失败率极端再单独立项调参。
-
-4. **性能（Day13）**  
-   - 真机高潮波尽量稳住 ~30fps。见 `PERFORMANCE.md`。
-
-5. **单元测试（本仓库 CI/本地）**  
-   - `npx vitest run` 全绿；`npx tsc -p tsconfig.test.json --noEmit` 无错误。
+- [x] 空 ID → Mock
+- [x] 进行中重复请求被拒
+- [x] Mock 失败率 1 → `ok: false`，UI 可再点（复活文案恢复、双倍回 Idle、补给可重试）
+- [ ] 真广告取消 / 失败不卡死（真机）
+- [ ] 真广告完成发奖（真机）
 
 ---
 
-## 6. 已知限制（冻包如实申报）
+## 6. 已知限制（如实申报）
 
-- 广告默认 Mock；未填 adUnitId 时不是正式变现（Day15 仍为空字符串）。
-- 美术为 Graphics 色块，非最终视觉。
+- 广告默认 Mock；未填 adUnitId 时不是正式变现。
+- 局内为程序生成像素精灵；品牌图为占位，非正式美术终稿。
 - 埋点仅内存 ring buffer + 控制台；`wx.reportAnalytics` 默认关。
 - 本开发 VM 从未跑过 Creator 预览或微信真机。
 - 无服务端、无登录；进度在本地存储，清缓存即丢。
@@ -178,4 +178,4 @@
 
 ---
 
-*Day15 提审前代码收口（玩法仍为 Day14 冻包）*
+*Day21 提审代码收口（玩法仍为 Day14 冻包 / Day10 数值）*

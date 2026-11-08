@@ -1,9 +1,9 @@
 # Creator / 微信开发者工具验收清单
 
-汇总 Day1–15 需在 **Cocos Creator 3.8+** 或微信开发者工具勾选的项。  
+汇总 Day1–21 需在 **Cocos Creator 3.8+** 或微信开发者工具勾选的项。  
 VM 无 Creator：**下列全部仍须人工**。单元测试见仓库 `npx vitest run`，不能替代本表。
 
-冻包玩法：v0 / Day14。代码收口：Day15。数值以 Day10 / `BALANCE.md` 为准，本表不改数值。
+冻包玩法：v0 / Day14。代码收口：Day21。数值以 Day10 / `BALANCE.md` 为准，本表不改数值。未完成的人测项不要勾。
 
 ---
 
@@ -34,7 +34,7 @@ VM 无 Creator：**下列全部仍须人工**。单元测试见仓库 `npx vites
 ## 2. 部署落子（Day2）
 
 - [ ] 底部三按钮：机枪 2DP / 炮轰 3DP / 地雷 1DP
-- [ ] 选中黄框，点绿色格落下 L1 色块，DP 扣除
+- [ ] 选中黄框，点绿色格落下 L1 像素塔，DP 扣除
 - [ ] DP 不足按钮灰、点了无落子
 - [ ] Combat / WaveClear / Settle：按钮灰、点格子无落子
 
@@ -166,6 +166,52 @@ VM 无 Creator：**下列全部仍须人工**。单元测试见仓库 `npx vites
 - [ ] 正文含 `zombie_frontline_meta_v1` / `zombie_frontline_save`（及当前 `zombie_frontline_meta_v2`），无账号、无未使用权限声明
 - [ ] 默认预览 **没有** 左下角 FPS / Draw call 性能叠层，也没有 DebugPanel
 - [ ] 需要叠层时：预览 URL 加 `?zf_debug=1`，或 `localStorage.setItem('zombie_frontline_debug','1')` 后刷新
+
+---
+
+## 16. 构建（人测）
+
+- [ ] 按 `LOCAL_SETUP.md` 构建微信小游戏；`builder.json` AppID 仍空则不要提审
+- [ ] 竖屏 720×1280；开发者工具能打开构建目录
+
+---
+
+## 17. 广告三坑（人测，代码侧已 Mock）
+
+- [ ] 空 ID 时 Mock 延迟后发奖；正式包须填三个真实 adUnitId
+- [ ] 取消 / 失败：复活按钮恢复、双倍可再点、补给可重试，不卡「加载中」
+- [ ] 真机完成路径：复活、双倍残骸、补给 +3 DP
+
+---
+
+## 18. 素材占位
+
+- [ ] 看见 `assets/branding/icon_1024.png` 等占位图；提审前替换
+- [ ] 未把占位图当成终稿审核截图
+
+---
+
+## 19. Debug 正式包
+
+- [ ] 默认预览无 FPS 叠层、无 DebugPanel、无「测试」大字
+- [ ] 需要时 `?zf_debug=1`；控制台 `zfDumpAnalytics()` 有摘要
+
+---
+
+## 20. 盲测（人测，未进行）
+
+- [ ] 用 `BLIND_TEST.md` 找 ≥10 名未玩过的人各打至少 1 局 L1
+- [ ] 不要把空表当成已测
+
+---
+
+## 21. 像素 UI
+
+- [ ] 机枪 / 炮轰 L1 与 L2、地雷外观可区分，不是圆点/纯色方块
+- [ ] 步行尸 / 快跑尸 / 胖尸外形可区分
+- [ ] 据点是像素碉堡；可建格偏绿、不可建偏红褐
+- [ ] Lobby / Boot 加载条 / 结算 / 复活 / 补给面板是同一套块状像素框
+- [ ] 默认仍无 FPS 叠层；玩家 UI 无「测试」大字
 
 ---
 

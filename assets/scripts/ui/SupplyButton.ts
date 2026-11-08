@@ -5,6 +5,7 @@
  */
 
 import { _decorator, Component, Node, Label, Graphics, Color, UITransform } from 'cc';
+import { drawPixelPanel, PIXEL_UI } from '../pixel/PixelChrome';
 import { GameData, GameEvents, EVENT_DP_CHANGED } from '../data/GameData';
 import { AdService, AdSlot } from '../ads/AdService';
 import { BattleState } from '../battle/BattleFlow';
@@ -63,9 +64,7 @@ export class SupplyButton extends Component {
         transform.setContentSize(300, 50);
         
         const graphics = this.buttonNode.addComponent(Graphics);
-        graphics.fillColor = new Color(100, 180, 255, 255);
-        graphics.roundRect(-150, -25, 300, 50, 8);
-        graphics.fill();
+        drawPixelPanel(graphics, -150, -25, 300, 50, new Color(58, 106, 170, 255), PIXEL_UI.accent);
         
         const labelNode = new Node('Label');
         labelNode.parent = this.buttonNode;
@@ -195,6 +194,7 @@ export class SupplyButton extends Component {
             Analytics.trackAdFail(AdSlot.WaveSupply, result.reason || 'unknown', adContext);
             
             console.log(`[SupplyButton] 补给广告失败: ${result.reason}`);
+            AdService.reset();
             if (this.buttonLabel) {
                 this.buttonLabel.string = '看完视频，紧急空投 3 部署点';
             }
