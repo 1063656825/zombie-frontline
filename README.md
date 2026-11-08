@@ -2,6 +2,18 @@
 
 > 竖屏轻塔防：波间落子 + 波内自动割草
 
+**v0 freeze（Day14）** — 可玩原型收口为提审文档包。版本见根目录 `VERSION`（`0.14.0-v0-freeze`）。Day10 数值已锁，无 IAP。
+
+| 文档 | 用途 |
+|------|------|
+| `SUBMISSION.md` | 微信小游戏提审清单（构建、合规、素材、盲测门禁） |
+| `CREATOR_QA.md` | Day1–13 Creator / 微信开发者工具可勾选验收 |
+| `PERFORMANCE.md` | Day13 对象池与真机帧率目标 |
+| `ANALYTICS.md` | 埋点与验证指标 |
+| `BALANCE.md` | Day10 平衡表（勿在冻包后顺手改） |
+
+**已知限制：** 广告默认 Mock（`AdService.ts` `AD_UNIT_IDS` 为空）；美术为色块占位；本开发环境 **无 Creator、无真机**，通关/广告/30fps **均未在此 VM 跑过**，必须以 `CREATOR_QA.md` 人测为准。
+
 ## 项目简介
 
 「尸潮防线」是一款末日丧尸题材的竖屏轻塔防微信小游戏。游戏采用独特的"双节奏"设计：
@@ -1658,10 +1670,30 @@ npx vitest run tests/day13.test.ts
 
 ---
 
+## Day14 完成内容（v0 freeze）
+
+冻包：不新开玩法、不改 Day10 数值。交付为提审与 QA 收口。
+
+### ✅ 文档
+
+- `SUBMISSION.md` — 微信提审：Creator 3.8 打开、`Boot.scene` 入口、720×1280、构建概要；无 IAP；三坑 Mock↔adUnitId；隐私占位；适龄/丧尸题材；图标截图待补；「尸潮防线」商标粗查；门禁（L1 通关、真机广告、≥10 人盲测指标）
+- `CREATOR_QA.md` — Day1–13 可勾选清单 + 提审前总闸
+- `VERSION` — `v0` / `0.14.0-v0-freeze`
+
+### ✅ 工程说明
+
+已有 `settings/v2/packages/project.json`（分辨率与启动场景）与 `builder.json`（微信竖屏、AppID 空）。未改玩法代码。`package.json` version 标为 `0.14.0`。
+
+### 仍须人工（Creator / 微信 / 真机）
+
+见 `CREATOR_QA.md` 与 `SUBMISSION.md` 第 5 节。本 VM 不能代替实机 L1 通关与真机广告。
+
+---
+
 ## 联系方式
 
 如有问题，请联系项目负责人。
 
 ---
 
-*Last updated: Day13 对象池与战斗热路径分配卫生*
+*Last updated: Day14 冻 v0 与提审清单*
