@@ -23,6 +23,7 @@ import { screenShake, screenFlashRed } from '../effects/HitEffects';
 import { initWxBridge } from '../platform/WxBridge';
 import { DeployPhaseIndicator } from '../ui/DeployPhaseIndicator';
 import { DangerSideIndicator, EnemyPosition } from '../ui/DangerSideIndicator';
+import { applyDebugOverlayPolicy } from './DebugOverlay';
 
 const { ccclass, property } = _decorator;
 
@@ -101,6 +102,7 @@ export class BattleScene extends Component {
     
     start() {
         console.log('[BattleScene] 战斗场景开始');
+        applyDebugOverlayPolicy();
         
         // Day7: 初始化微信桥接
         initWxBridge();

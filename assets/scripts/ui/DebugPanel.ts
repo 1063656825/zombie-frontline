@@ -7,6 +7,7 @@
 import { _decorator, Component, Node, Label, Button } from 'cc';
 import { BattleFlow, BattleState, BattleEvents, EVENT_STATE_CHANGED } from '../battle/BattleFlow';
 import { GameData, GameEvents, EVENT_HP_CHANGED, EVENT_DP_CHANGED } from '../data/GameData';
+import { isDebugOverlayEnabled } from '../core/DebugFlags';
 
 const { ccclass, property } = _decorator;
 
@@ -23,6 +24,21 @@ export class DebugPanel extends Component {
     private readonly MAX_LOGS = 10;
     
     start() {
+        const href = typeof location !== 'undefined' ? location.href : '';
+        const enabled = isDebugOverlayEnabled({
+            href,
+            storageGet: (key) => {
+                try {
+                    return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+                } catch {
+                    return null;
+                }
+            }
+        });
+        if (!enabled) {
+            this.node.active = false;
+            return;
+        }
         this.setupEventListeners();
         this.log('调试面板启动');
     }

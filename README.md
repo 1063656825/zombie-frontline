@@ -2,12 +2,12 @@
 
 > 竖屏轻塔防：波间落子 + 波内自动割草
 
-**v0 freeze（Day14）** — 可玩原型收口为提审文档包。版本见根目录 `VERSION`（`0.14.0-v0-freeze`）。Day10 数值已锁，无 IAP。
+**v0 / Day15** — 提审前代码收口（隐私/协议、Debug 默认关、广告配置说明）。玩法与数值仍为 Day14 冻包 / Day10 锁表。版本见 `VERSION`（`0.15.0-v0-day15`）。无 IAP。
 
 | 文档 | 用途 |
 |------|------|
 | `SUBMISSION.md` | 微信小游戏提审清单（构建、合规、素材、盲测门禁） |
-| `CREATOR_QA.md` | Day1–13 Creator / 微信开发者工具可勾选验收 |
+| `CREATOR_QA.md` | Day1–15 Creator / 微信开发者工具可勾选验收 |
 | `PERFORMANCE.md` | Day13 对象池与真机帧率目标 |
 | `ANALYTICS.md` | 埋点与验证指标 |
 | `BALANCE.md` | Day10 平衡表（勿在冻包后顺手改） |
@@ -1692,10 +1692,25 @@ npx vitest run tests/day13.test.ts
 
 ---
 
+## Day15 完成内容（提审前代码收口）
+
+不改 Day10 数值、不填真实 AppID/adUnitId。
+
+### ✅ 合规入口
+大厅底部「隐私政策」「用户协议」→ 全屏可滚动 Overlay →「返回」。正文见 `assets/scripts/core/LegalContent.ts`，存储键与 `MetaData` / `GameData` 一致。
+
+### ✅ Debug 默认关
+Boot / Lobby / Battle 启动时 `profiler.hideStats()`。需要时：预览 URL `?zf_debug=1`，或 `localStorage.setItem('zombie_frontline_debug','1')`，或把 `FORCE_DEBUG_OVERLAY` 改为 `true`（勿提交正式包）。
+
+### ✅ 广告仍 Mock
+`AD_UNIT_IDS` 三个 key 为空。填写步骤与 `revive` / `settle_double` / `wave_supply` 对应关系写在 `AdService.ts` 与 `SUBMISSION.md`。
+
+---
+
 ## 联系方式
 
 如有问题，请联系项目负责人。
 
 ---
 
-*Last updated: Day14 冻 v0 与提审清单*
+*Last updated: Day15 提审前代码收口*

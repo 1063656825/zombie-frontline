@@ -1,9 +1,9 @@
 # Creator / 微信开发者工具验收清单
 
-汇总 Day1–13 需在 **Cocos Creator 3.8+** 或微信开发者工具勾选的项。  
+汇总 Day1–15 需在 **Cocos Creator 3.8+** 或微信开发者工具勾选的项。  
 VM 无 Creator：**下列全部仍须人工**。单元测试见仓库 `npx vitest run`，不能替代本表。
 
-冻包：v0 / Day14。数值以 Day10 / `BALANCE.md` 为准，本表不改数值。
+冻包玩法：v0 / Day14。代码收口：Day15。数值以 Day10 / `BALANCE.md` 为准，本表不改数值。
 
 ---
 
@@ -152,10 +152,20 @@ VM 无 Creator：**下列全部仍须人工**。单元测试见仓库 `npx vites
 - [ ] `CREATOR_QA.md` 第 1–13 节与本机相关的项已勾
 - [ ] `SUBMISSION.md` 门禁：L1 通关、真机三坑广告、≥10 人盲测指标
 - [ ] 图标 / 启动图 / 截图已备（或接受占位被拒风险）
-- [ ] 隐私政策 URL 已配；无 IAP 声明属实
+- [ ] 隐私政策：大厅内页已有（Day15）；公众平台「用户隐私保护指引」仍须人工勾选；无 IAP 声明属实
 - [ ] `builder.json` AppID 已填；广告位 ID 非空
 - [ ] 名称「尸潮防线」已做商标/重名粗查
-- [ ] 正式包关闭或藏起 Debug 跳波等调试入口
+- [ ] 正式包关闭或藏起 Debug 跳波等调试入口（Day15 默认已关，见第 15 节）
+
+---
+
+## 15. 提审前代码收口（Day15）
+
+- [ ] Lobby 底部能看到「隐私政策」「用户协议」，不挡住「开始战斗」
+- [ ] 点开后全屏中文正文可拖动阅读，有「返回」，返回后仍在大厅
+- [ ] 正文含 `zombie_frontline_meta_v1` / `zombie_frontline_save`（及当前 `zombie_frontline_meta_v2`），无账号、无未使用权限声明
+- [ ] 默认预览 **没有** 左下角 FPS / Draw call 性能叠层，也没有 DebugPanel
+- [ ] 需要叠层时：预览 URL 加 `?zf_debug=1`，或 `localStorage.setItem('zombie_frontline_debug','1')` 后刷新
 
 ---
 

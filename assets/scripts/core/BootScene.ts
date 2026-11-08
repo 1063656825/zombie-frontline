@@ -14,6 +14,7 @@ import {
     launchedCallbackHasError,
     LOBBY_SCENE_UUID
 } from './BootGate';
+import { applyDebugOverlayPolicy } from './DebugOverlay';
 
 const { ccclass, property } = _decorator;
 
@@ -40,9 +41,10 @@ export class BootScene extends Component {
     
     start() {
         console.log('[BootScene] 启动场景开始');
+        applyDebugOverlayPolicy();
         
         if (this.versionLabel) {
-            this.versionLabel.string = '尸潮防线 v0.14.0';
+            this.versionLabel.string = '尸潮防线 v0.15.0';
         }
         
         this.setStatus('正在初始化...');

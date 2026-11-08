@@ -15,12 +15,35 @@ export enum AdSlot {
     WaveSupply = 'wave_supply'   // ③ 波次补给
 }
 
-// 广告单元 ID 配置（留空使用 Mock）
+/**
+ * 微信激励视频 adUnitId。三个 key 都必须是空字符串才会走 Mock。
+ *
+ * 提审前填写步骤（不要把测试广告位 ID 打进正式包）：
+ * 1. 微信公众平台 → 流量主 → 广告管理 → 创建「激励式视频」。
+ * 2. 建三个广告位，把生成的 adUnitId 粘到下面对应槽（勿编造 ID）。
+ * 3. 留 '' 则该槽本地 Mock：0.5–1s 延迟，默认成功。
+ *
+ * 槽位对应：
+ *   revive         → 复活面板「看完视频，站起来再打一波」
+ *   settle_double  → 胜利结算残骸双倍
+ *   wave_supply    → 部署窗 DP<3 的「紧急空投」
+ */
 export const AD_UNIT_IDS: Record<AdSlot, string> = {
-    [AdSlot.Revive]: '',         // 填入真实 adUnitId
+    [AdSlot.Revive]: '',
     [AdSlot.SettleDouble]: '',
     [AdSlot.WaveSupply]: ''
 };
+
+export const AD_SLOT_FILL_GUIDE: ReadonlyArray<{ slot: AdSlot; wechatKey: string; ui: string }> = [
+    { slot: AdSlot.Revive, wechatKey: 'revive', ui: '复活面板' },
+    { slot: AdSlot.SettleDouble, wechatKey: 'settle_double', ui: '胜利结算双倍' },
+    { slot: AdSlot.WaveSupply, wechatKey: 'wave_supply', ui: '波间紧急空投' }
+];
+
+/** 三个 adUnitId 都为空时走 Mock（当前提审前默认）。 */
+export function isAdConfigMock(ids: Record<AdSlot, string> = AD_UNIT_IDS): boolean {
+    return !ids[AdSlot.Revive] && !ids[AdSlot.SettleDouble] && !ids[AdSlot.WaveSupply];
+}
 
 // ============================================================
 // 广告结果

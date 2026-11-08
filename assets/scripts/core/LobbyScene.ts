@@ -19,6 +19,9 @@ import {
 import { SCENE_BATTLE } from './SceneManager';
 import { LevelId, getLevelConfig, LEVEL_CONFIGS } from '../battle/WaveConfig';
 import { BATTLE_SCENE_UUID, launchedCallbackHasError, shouldFallbackToUuid } from './BootGate';
+import { applyDebugOverlayPolicy } from './DebugOverlay';
+import { LOBBY_LEGAL_ENTRIES } from './LegalContent';
+import { LegalOverlay } from '../ui/LegalOverlay';
 
 const { ccclass, property } = _decorator;
 
@@ -49,6 +52,7 @@ export class LobbyScene extends Component {
     battleScene: SceneAsset | null = null;
     
     private _battleJumpStarted = false;
+    private _legalOverlay: LegalOverlay | null = null;
     
     // 升级行 UI
     private _firepowerRow: UpgradeRowUI | null = null;
@@ -64,6 +68,7 @@ export class LobbyScene extends Component {
     
     start() {
         console.log('[LobbyScene] 大厅场景开始');
+        applyDebugOverlayPolicy();
         
         // 创建升级 UI
         this.createUpgradeUI();
@@ -83,6 +88,8 @@ export class LobbyScene extends Component {
         
         // 首次提示
         this.showFirstTimeTip();
+        
+        this.createLegalEntries();
     }
     
     onDestroy() {
@@ -449,6 +456,45 @@ export class LobbyScene extends Component {
             // 锁定图标
             ui.lockIcon.active = !isUnlocked;
         }
+    }
+    
+    /**
+     * 大厅底部「隐私政策」「用户协议」入口：不挡「开始战斗」（约 y=-420）。
+     */
+    private createLegalEntries() {
+        const parent = this.upgradeContainer || this.node;
+        this._legalOverlay = new LegalOverlay(parent);
+        
+        LOBBY_LEGAL_ENTRIES.forEach((entry, i) => {
+            const x = i === 0 ? -170 : 170;
+            const button = new Node(`LegalBtn_${entry.id}`);
+            button.parent = parent;
+            button.setPosition(x, -530, 0);
+            
+            const tf = button.addComponent(UITransform);
+            tf.setContentSize(200, 48);
+            
+            const g = button.addComponent(Graphics);
+            g.fillColor = new Color(36, 42, 58, 230);
+            g.roundRect(-100, -24, 200, 48, 8);
+            g.fill();
+            g.strokeColor = new Color(120, 140, 170, 200);
+            g.lineWidth = 1;
+            g.roundRect(-100, -24, 200, 48, 8);
+            g.stroke();
+            
+            const labelNode = new Node('Label');
+            labelNode.parent = button;
+            const label = labelNode.addComponent(Label);
+            label.string = entry.label;
+            label.fontSize = 22;
+            label.lineHeight = 28;
+            label.color = new Color(200, 210, 230, 255);
+            
+            button.on(Node.EventType.TOUCH_END, () => {
+                this._legalOverlay?.open(entry.id);
+            }, this);
+        });
     }
     
     /**

@@ -260,7 +260,7 @@ def build_boot():
     status_lbl = b.label(status, "正在加载...", font=30, line=40, w=720, h=50)
 
     version = b.add_node("VersionLabel", canvas, (0, -420, 0))
-    ver_lbl = b.label(version, "v0.14.0", font=20, line=30, col=(180, 180, 180, 255), w=720, h=40)
+    ver_lbl = b.label(version, "v0.15.0", font=20, line=30, col=(180, 180, 180, 255), w=720, h=40)
 
     b.script(canvas, "BootScene", {
         "statusLabel": ref(status_lbl),
@@ -439,6 +439,9 @@ def main():
     }
     extra = [
         "assets/scripts/core/BootGate.ts",
+        "assets/scripts/core/LegalContent.ts",
+        "assets/scripts/core/DebugFlags.ts",
+        "assets/scripts/core/DebugOverlay.ts",
         "assets/scripts/core/SceneManager.ts",
         "assets/scripts/core/ObjectPool.ts",
         "assets/scripts/data/GameData.ts",
@@ -451,6 +454,7 @@ def main():
         "assets/scripts/ui/TutorialGuide.ts",
         "assets/scripts/ui/SupplyButton.ts",
         "assets/scripts/ui/DebugPanel.ts",
+        "assets/scripts/ui/LegalOverlay.ts",
         "assets/scripts/ui/DeployPhaseIndicator.ts",
         "assets/scripts/ui/DangerSideIndicator.ts",
         "assets/scripts/ads/AdService.ts",

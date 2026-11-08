@@ -1,6 +1,6 @@
 # 微信小游戏提审清单 — 尸潮防线 v0
 
-冻包：Day14。玩法与 Day10 数值已锁。纯 IAA，无支付/商城。
+冻包玩法：Day14。代码收口：Day15。玩法与 Day10 数值已锁。纯 IAA，无支付/商城。
 
 本 VM **无 Cocos Creator、无微信开发者工具、无真机**。下列构建/提审步骤必须在本机 Creator + 微信后台完成。
 
@@ -60,26 +60,23 @@
 
 **Mock ↔ 真实广告：**
 
-- 配置文件：`assets/scripts/ads/AdService.ts` → `AD_UNIT_IDS`。
-- 三个 key 目前都是 `''`：**空则走 Mock**（0.5–1s 延迟，默认成功）。
-- 真机提审前：在微信公众平台创建激励视频广告位，把三个 `adUnitId` 填进 `AD_UNIT_IDS`。
+- 配置文件：`assets/scripts/ads/AdService.ts` → `AD_UNIT_IDS`（Day15 三个 key 仍为 `''`，**不要编造 ID**）。
+- 对应关系：`revive` 复活 / `settle_double` 胜利双倍 / `wave_supply` 波间补给。
+- 填写步骤：微信公众平台 → 流量主 → 创建三个激励式视频广告位 → 把真实 `adUnitId` 分别粘进上述三个 key。空字符串则该槽走 Mock（0.5–1s 延迟，默认成功）。
 - 真实路径：微信环境且 adUnitId 非空 → `wx.createRewardedVideoAd`；失败回退 Mock（见 `showRealAd`）。
 - 不要把测试广告位 ID 提交到正式审核包。
 
 文案已避免「看广告领钱」类违规承诺，保持「看完视频再打一波 / 残骸翻倍 / 紧急空投 DP」。
 
-### 隐私 / 用户协议（占位）
+### 隐私 / 用户协议（Day15 已落地）
 
-当前包 **没有** 独立隐私政策页、用户协议页、权限弹窗。
+大厅底部有「隐私政策」「用户协议」按钮（不挡「开始战斗」）。点开为全屏可滚动 Overlay，点「返回」关闭。正文在 `assets/scripts/core/LegalContent.ts`。
 
-提审前必须补（可先做 Lobby 链接 + 托管网页，不必本轮改玩法代码）：
+- [x] 《隐私政策》：说明 localStorage / `wx.setStorageSync`；当前键 `zombie_frontline_meta_v2`，历史 `zombie_frontline_meta_v1` 与 `zombie_frontline_save`；无账号；仅本地成长/关卡解锁；激励视频由微信 SDK；不使用定位/相册/通讯录。
+- [x] 《用户协议》：纯 IAA、无支付/商城、本地进度无云存档。
+- [ ] 微信公众平台「用户隐私保护指引」仍须运营按上文勾选（**不要**勾未使用权限）。本仓库不包含公众平台后台字段。
 
-- [ ] 《隐私政策》：说明 localStorage / `wx.setStorageSync` 存三线成长与关卡解锁；无账号系统；广告 SDK 由微信提供。
-- [ ] 《用户协议》或游戏许可。
-- [ ] 微信公众平台「用户隐私保护指引」与代码声明一致。
-- [ ] 若未申请相册/定位等，**不要**在指引里勾选未使用的权限。
-
-存储键（供隐私文案引用）：`zombie_frontline_meta_v1`（及历史 `zombie_frontline_save`）。
+存储键（与代码一致）：`zombie_frontline_meta_v2`（当前）、`zombie_frontline_meta_v1`（迁移）、`zombie_frontline_save`（GameData 历史）。
 
 ### 适龄与题材（末日丧尸）
 
@@ -91,8 +88,16 @@
 ### 其它常见驳回点
 
 - [ ] 分享文案不诱导（`WxBridge` 默认标题可用，勿改成「不分享无法玩」）。
-- [ ] 无「测试版/内测/调试」大字残留在玩家可见 UI（DebugPanel 勿进正式包展示）。
+- [x] 玩家可见 UI 默认不显示性能叠层 / DebugPanel（Day15：`applyDebugOverlayPolicy`，见下「如何开 Debug」）。
 - [ ] 小游戏类目与玩法一致（塔防/策略）。
+
+**如何临时打开 Debug / 性能叠层（正式包保持关）：**
+
+1. 浏览器预览 URL 加 `?zf_debug=1` 后刷新。
+2. 控制台执行 `localStorage.setItem('zombie_frontline_debug','1')` 后刷新（清掉则关）。
+3. 仅本地把 `FORCE_DEBUG_OVERLAY`（`assets/scripts/core/DebugFlags.ts`）改为 `true` 再编译；**不要把 true 提交进正式包**。
+
+不要用引擎 `DEBUG` 宏当开关：Creator 预览里它几乎总是 true。
 
 ---
 
@@ -163,13 +168,14 @@
 
 ## 6. 已知限制（冻包如实申报）
 
-- 广告默认 Mock；未填 adUnitId 时不是正式变现。
+- 广告默认 Mock；未填 adUnitId 时不是正式变现（Day15 仍为空字符串）。
 - 美术为 Graphics 色块，非最终视觉。
 - 埋点仅内存 ring buffer + 控制台；`wx.reportAnalytics` 默认关。
 - 本开发 VM 从未跑过 Creator 预览或微信真机。
 - 无服务端、无登录；进度在本地存储，清缓存即丢。
 - 弹体为即时命中，无飞行弹表现。
+- 大厅已有隐私/协议 Overlay；微信公众平台隐私指引仍须人工勾选。
 
 ---
 
-*Day14 v0 freeze*
+*Day15 提审前代码收口（玩法仍为 Day14 冻包）*
