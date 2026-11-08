@@ -13,6 +13,8 @@ VM 无 Creator：**下列全部仍须人工**。单元测试见仓库 `npx vites
 - [ ] `settings/v2/packages/project.json` 设计分辨率 720×1280、fitHeight
 - [ ] 启动场景为 `assets/scenes/Boot.scene`
 - [ ] 预览竖屏，画布不被横向裁切到无法点按钮
+- [ ] 预览 `Boot.scene` 能进画面，约 1.5s 跳转 Lobby（不再报 `_onBatchCreated is not a function`）
+- [ ] 若本地曾用旧手写 scene 生成过 `library/`：关掉 Creator，删掉项目里的 `library/`、`temp/` 后重开（脚本 `.meta` UUID 已入库，须与场景引用一致）
 
 ---
 
