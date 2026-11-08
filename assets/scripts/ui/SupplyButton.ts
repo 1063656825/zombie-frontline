@@ -8,6 +8,8 @@ import { _decorator, Component, Node, Label, Graphics, Color, UITransform } from
 import { GameData, GameEvents, EVENT_DP_CHANGED } from '../data/GameData';
 import { AdService, AdSlot } from '../ads/AdService';
 import { BattleState } from '../battle/BattleFlow';
+import { Analytics } from '../analytics/Analytics';
+import { LevelId } from '../battle/WaveConfig';
 
 const { ccclass, property } = _decorator;
 
@@ -28,6 +30,11 @@ export class SupplyButton extends Component {
     
     // 当前战斗状态
     private _currentState: BattleState = BattleState.None;
+    
+    // Day12: 埋点上下文
+    private _levelId: LevelId = LevelId.L1;
+    private _waveIndex: number = 0;
+    private _adShowTracked: boolean = false;  // 防止重复上报 ad_show
     
     // 回调
     private _onSupplyGranted: (() => void) | null = null;
@@ -101,11 +108,20 @@ export class SupplyButton extends Component {
     }
     
     /**
+     * Day12: 设置埋点上下文
+     */
+    setLevelContext(levelId: LevelId, waveIndex: number) {
+        this._levelId = levelId;
+        this._waveIndex = waveIndex;
+    }
+    
+    /**
      * 重置本局状态
      */
     resetForNewRun() {
         this._usedThisRun = false;
         this._isWatching = false;
+        this._adShowTracked = false;  // Day12: 重置 ad_show 上报标记
         this.updateVisibility();
     }
     
@@ -121,10 +137,20 @@ export class SupplyButton extends Component {
         const dpLow = GameData.dp < 3;
         const canShow = isDeployPhase && dpLow && !this._usedThisRun && !this._isWatching;
         
+        const wasHidden = !this.buttonNode.active;
         this.buttonNode.active = canShow;
         
         if (canShow) {
             console.log('[SupplyButton] 显示补给按钮 (DP < 3)');
+            
+            // Day12: 埋点 - 广告展示（首次显示）
+            if (wasHidden && !this._adShowTracked) {
+                this._adShowTracked = true;
+                Analytics.trackAdShow(AdSlot.WaveSupply, { 
+                    level_id: this._levelId, 
+                    wave_index: this._waveIndex 
+                });
+            }
         }
     }
     
@@ -133,6 +159,11 @@ export class SupplyButton extends Component {
      */
     private async onButtonClick() {
         if (this._usedThisRun || this._isWatching) return;
+        
+        const adContext = { level_id: this._levelId, wave_index: this._waveIndex };
+        
+        // Day12: 埋点 - 广告点击
+        Analytics.trackAdClick(AdSlot.WaveSupply, adContext);
         
         console.log('[SupplyButton] 请求补给广告');
         this._isWatching = true;
@@ -147,6 +178,9 @@ export class SupplyButton extends Component {
         this._isWatching = false;
         
         if (result.ok) {
+            // Day12: 埋点 - 广告完成
+            Analytics.trackAdComplete(AdSlot.WaveSupply, adContext);
+            
             this._usedThisRun = true;
             
             // 发放 +3 DP（受上限限制）
@@ -157,6 +191,9 @@ export class SupplyButton extends Component {
                 this._onSupplyGranted();
             }
         } else {
+            // Day12: 埋点 - 广告失败
+            Analytics.trackAdFail(AdSlot.WaveSupply, result.reason || 'unknown', adContext);
+            
             console.log(`[SupplyButton] 补给广告失败: ${result.reason}`);
             if (this.buttonLabel) {
                 this.buttonLabel.string = '看完视频，紧急空投 3 部署点';

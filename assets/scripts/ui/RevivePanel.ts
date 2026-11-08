@@ -9,6 +9,8 @@ import { _decorator, Component, Node, Label, Graphics, Color, UITransform, Vec3 
 import { GameData } from '../data/GameData';
 import { AdService, AdSlot } from '../ads/AdService';
 import { AudioService, SfxId } from '../audio/AudioService';
+import { Analytics } from '../analytics/Analytics';
+import { LevelId } from '../battle/WaveConfig';
 
 const { ccclass, property } = _decorator;
 
@@ -49,6 +51,10 @@ export class RevivePanel extends Component {
     
     // 广告状态
     private _isWatchingAd: boolean = false;
+    
+    // Day12: 埋点上下文
+    private _levelId: LevelId = LevelId.L1;
+    private _waveIndex: number = 0;
     
     onLoad() {
         this.hide();
@@ -171,17 +177,29 @@ export class RevivePanel extends Component {
     /**
      * 显示复活面板
      */
-    show(canRevive: boolean, onRevive: ReviveCallback, onGiveUp: GiveUpCallback) {
+    show(canRevive: boolean, onRevive: ReviveCallback, onGiveUp: GiveUpCallback, levelId?: LevelId, waveIndex?: number) {
         this._canRevive = canRevive;
         this._onRevive = onRevive;
         this._onGiveUp = onGiveUp;
         this._isWatchingAd = false;
+        
+        // Day12: 保存埋点上下文
+        this._levelId = levelId || LevelId.L1;
+        this._waveIndex = waveIndex || 0;
         
         if (this.panelRoot) {
             this.panelRoot.active = true;
         }
         
         this.updateUI();
+        
+        // Day12: 埋点 - 广告展示（复活选项可见）
+        if (canRevive) {
+            Analytics.trackAdShow(AdSlot.Revive, { 
+                level_id: this._levelId, 
+                wave_index: this._waveIndex 
+            });
+        }
         
         console.log(`[RevivePanel] 显示复活面板，可复活: ${canRevive}`);
     }
@@ -234,6 +252,11 @@ export class RevivePanel extends Component {
         // Day8: UI 点击音效
         AudioService.play(SfxId.UiClick);
         
+        const adContext = { level_id: this._levelId, wave_index: this._waveIndex };
+        
+        // Day12: 埋点 - 广告点击
+        Analytics.trackAdClick(AdSlot.Revive, adContext);
+        
         console.log('[RevivePanel] 请求复活广告');
         this._isWatchingAd = true;
         
@@ -248,12 +271,18 @@ export class RevivePanel extends Component {
         this._isWatchingAd = false;
         
         if (result.ok) {
+            // Day12: 埋点 - 广告完成
+            Analytics.trackAdComplete(AdSlot.Revive, adContext);
+            
             console.log('[RevivePanel] 广告完成，执行复活');
             this.hide();
             if (this._onRevive) {
                 this._onRevive();
             }
         } else {
+            // Day12: 埋点 - 广告失败
+            Analytics.trackAdFail(AdSlot.Revive, result.reason || 'unknown', adContext);
+            
             console.log(`[RevivePanel] 广告失败: ${result.reason}`);
             if (this.reviveBtnLabel) {
                 this.reviveBtnLabel.string = '看完视频，站起来再打一波';
@@ -266,6 +295,14 @@ export class RevivePanel extends Component {
      */
     private onGiveUpClick() {
         if (this._isWatchingAd) return;
+        
+        // Day12: 埋点 - 跳过广告（可复活但放弃）
+        if (this._canRevive) {
+            Analytics.trackAdSkip(AdSlot.Revive, { 
+                level_id: this._levelId, 
+                wave_index: this._waveIndex 
+            });
+        }
         
         console.log('[RevivePanel] 放弃复活');
         this.hide();

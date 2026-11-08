@@ -11,6 +11,7 @@ import { GameData, GameEvents, EVENT_HP_CHANGED } from '../data/GameData';
 import { WaveConfig, WAVE_CONFIGS, LevelId, getLevelWaves, getLevelBaseScrap, getLevelConfig } from './WaveConfig';
 import { MetaData } from '../data/MetaData';
 import { AudioService, SfxId } from '../audio/AudioService';
+import { Analytics } from '../analytics/Analytics';
 
 const { ccclass, property } = _decorator;
 
@@ -118,6 +119,9 @@ export class BattleFlow extends Component {
         this._currentWave = 0;
         this._isRevived = false;
         
+        // Day12: 埋点 - 对局开始
+        Analytics.trackRunStart(this._currentLevelId);
+        
         // 进入首波部署阶段
         this.startDeployPhase();
         
@@ -207,6 +211,9 @@ export class BattleFlow extends Component {
         // Day8: 波次开始音效
         AudioService.play(SfxId.WaveStart);
         
+        // Day12: 埋点 - 波次开始（算作一次尝试）
+        Analytics.trackWaveStart(this._currentLevelId, this._currentWave);
+        
         BattleEvents.emit(EVENT_WAVE_START, this._currentWave);
         this.changeState(BattleState.Combat);
         
@@ -230,6 +237,9 @@ export class BattleFlow extends Component {
      */
     private onWaveClear() {
         console.log(`[BattleFlow] 波次 ${this._currentWave} 清除`);
+        
+        // Day12: 埋点 - 波次清除
+        Analytics.trackWaveClear(this._currentLevelId, this._currentWave);
         
         this._timer = this.WAVE_CLEAR_TIME;
         this.changeState(BattleState.WaveClear);
@@ -258,6 +268,13 @@ export class BattleFlow extends Component {
      */
     private onBattleWin() {
         console.log('[BattleFlow] 战斗胜利！');
+        
+        // Day12: 埋点 - 对局胜利
+        Analytics.trackRunEnd(true, this._currentWave);
+        Analytics.track('run_win', { 
+            level_id: this._currentLevelId,
+            wave_reached: this._currentWave 
+        });
         
         // Day9: 发放关卡基础残骸奖励
         GameData.addScrap(this._baseScrapReward);
@@ -309,6 +326,9 @@ export class BattleFlow extends Component {
     private onBattleLose() {
         console.log('[BattleFlow] 据点被摧毁！');
         
+        // Day12: 埋点 - 波次失败
+        Analytics.trackWaveFail(this._currentLevelId, this._currentWave, 'base_hp_zero');
+        
         if (!this._isRevived) {
             // 可以复活，显示复活面板
             console.log('[BattleFlow] 可使用复活广告');
@@ -317,6 +337,14 @@ export class BattleFlow extends Component {
         } else {
             // 已用过复活，直接失败
             console.log('[BattleFlow] 已使用过复活，直接失败');
+            
+            // Day12: 埋点 - 对局失败
+            Analytics.trackRunEnd(false, this._currentWave);
+            Analytics.track('run_lose', { 
+                level_id: this._currentLevelId,
+                wave_reached: this._currentWave 
+            });
+            
             this.changeState(BattleState.Settle);
             
             // Day8: 失败音效
@@ -344,6 +372,9 @@ export class BattleFlow extends Component {
         
         this._isRevived = true;
         
+        // Day12: 埋点 - 复活使用
+        Analytics.trackReviveUsed(this._currentLevelId, this._currentWave);
+        
         // 回复 50% HP
         GameData.hp = Math.floor(GameData.maxHp * 0.5);
         
@@ -367,6 +398,15 @@ export class BattleFlow extends Component {
      */
     giveUpRevive() {
         console.log('[BattleFlow] 放弃复活');
+        
+        // Day12: 埋点 - 对局失败（放弃复活）
+        Analytics.trackRunEnd(false, this._currentWave);
+        Analytics.track('run_lose', { 
+            level_id: this._currentLevelId,
+            wave_reached: this._currentWave,
+            gave_up_revive: 1
+        });
+        
         this.changeState(BattleState.Settle);
         
         // Day8: 失败音效

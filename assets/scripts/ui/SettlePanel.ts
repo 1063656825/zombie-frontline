@@ -10,6 +10,8 @@ import { _decorator, Component, Node, Label, Graphics, Color, UITransform } from
 import { GameData } from '../data/GameData';
 import { AdService, AdSlot } from '../ads/AdService';
 import { AudioService, SfxId } from '../audio/AudioService';
+import { Analytics } from '../analytics/Analytics';
+import { LevelId } from '../battle/WaveConfig';
 
 const { ccclass, property } = _decorator;
 
@@ -54,6 +56,10 @@ export class SettlePanel extends Component {
     private _doubleState: DoubleRewardState = DoubleRewardState.Idle;
     private _baseScrap: number = 0;
     private _totalScrap: number = 0;
+    
+    // Day12: 埋点上下文
+    private _levelId: LevelId = LevelId.L1;
+    private _waveReached: number = 0;
     
     onLoad() {
         this.hide();
@@ -179,9 +185,13 @@ export class SettlePanel extends Component {
     /**
      * 显示胜利结算
      */
-    showWin(waveCleared: number, totalWaves: number, scrapEarned: number, onConfirm: SettleCallback) {
+    showWin(waveCleared: number, totalWaves: number, scrapEarned: number, onConfirm: SettleCallback, levelId?: LevelId) {
         this._isWin = true;
         this._onConfirm = onConfirm;
+        
+        // Day12: 保存埋点上下文
+        this._levelId = levelId || LevelId.L1;
+        this._waveReached = waveCleared;
         
         // 重置双倍状态（Day5）
         this._doubleState = DoubleRewardState.Idle;
@@ -208,6 +218,12 @@ export class SettlePanel extends Component {
         // 显示双倍按钮（仅胜利）
         this.updateDoubleButton();
         
+        // Day12: 埋点 - 广告展示（双倍按钮可见）
+        Analytics.trackAdShow(AdSlot.SettleDouble, { 
+            level_id: this._levelId, 
+            wave_reached: this._waveReached 
+        });
+        
         // 更新边框颜色
         this.updatePanelBorder(new Color(100, 255, 100, 255));
         
@@ -220,9 +236,13 @@ export class SettlePanel extends Component {
     /**
      * 显示失败结算
      */
-    showLose(waveReached: number, totalWaves: number, scrapEarned: number, onConfirm: SettleCallback) {
+    showLose(waveReached: number, totalWaves: number, scrapEarned: number, onConfirm: SettleCallback, levelId?: LevelId) {
         this._isWin = false;
         this._onConfirm = onConfirm;
+        
+        // Day12: 保存埋点上下文
+        this._levelId = levelId || LevelId.L1;
+        this._waveReached = waveReached;
         
         // 失败不提供双倍（Day5）
         this._doubleState = DoubleRewardState.Claimed;  // 直接置为已领取，禁用按钮
@@ -315,19 +335,24 @@ export class SettlePanel extends Component {
         // Day8: UI 点击音效
         AudioService.play(SfxId.UiClick);
         
+        const adContext = { level_id: this._levelId, wave_reached: this._waveReached };
+        
+        // Day12: 埋点 - 广告点击
+        Analytics.trackAdClick(AdSlot.SettleDouble, adContext);
+        
         console.log('[SettlePanel] 请求双倍广告...');
         this._doubleState = DoubleRewardState.Watching;
         this.updateDoubleButton();
         
         // 通过 AdService 请求广告
         const result = await AdService.showRewarded(AdSlot.SettleDouble);
-        this.onAdComplete(result.ok);
+        this.onAdComplete(result.ok, result.reason);
     }
     
     /**
      * 广告完成回调
      */
-    private onAdComplete(success: boolean) {
+    private onAdComplete(success: boolean, reason?: string) {
         if (this._doubleState !== DoubleRewardState.Watching) {
             console.log('[SettlePanel] 重复回调被忽略');
             return;
@@ -335,7 +360,12 @@ export class SettlePanel extends Component {
         
         this._doubleState = DoubleRewardState.Claimed;
         
+        const adContext = { level_id: this._levelId, wave_reached: this._waveReached };
+        
         if (success) {
+            // Day12: 埋点 - 广告完成
+            Analytics.trackAdComplete(AdSlot.SettleDouble, adContext);
+            
             // 额外发放等额残骸
             GameData.addScrap(this._baseScrap);
             this._totalScrap = this._baseScrap * 2;
@@ -347,6 +377,9 @@ export class SettlePanel extends Component {
             
             console.log(`[SettlePanel] 模拟广告成功，额外获得: +${this._baseScrap}，总计: ${this._totalScrap}`);
         } else {
+            // Day12: 埋点 - 广告失败
+            Analytics.trackAdFail(AdSlot.SettleDouble, reason || 'unknown', adContext);
+            
             console.log('[SettlePanel] 模拟广告失败/取消');
         }
         

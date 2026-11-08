@@ -498,11 +498,13 @@ export class BattleScene extends Component {
         }
         
         // 显示复活面板
-        if (this._revivePanel) {
+        if (this._revivePanel && this.battleFlow) {
             this._revivePanel.show(
                 canRevive,
                 () => this.onReviveConfirm(),
-                () => this.onReviveGiveUp()
+                () => this.onReviveGiveUp(),
+                this.battleFlow.currentLevelId,  // Day12: 传递关卡上下文
+                this.battleFlow.currentWave
             );
         }
     }
@@ -535,8 +537,16 @@ export class BattleScene extends Component {
     private onBattleStateChanged(newState: BattleState, oldState: BattleState) {
         console.log(`[BattleScene] 状态变化: ${oldState} → ${newState}`);
         
+        // Day12: 更新埋点上下文
+        const levelId = this.battleFlow?.currentLevelId;
+        const waveIndex = this.battleFlow?.currentWave || 0;
+        
         if (this.gridBuild) {
             this.gridBuild.setBattleState(newState);
+            // Day12: 设置埋点上下文
+            if (levelId) {
+                this.gridBuild.setLevelContext(levelId, waveIndex);
+            }
         }
         
         if (this.startCombatBtn) {
@@ -551,6 +561,10 @@ export class BattleScene extends Component {
         // Day7: 更新补给按钮状态
         if (this._supplyButton) {
             this._supplyButton.setBattleState(newState);
+            // Day12: 设置埋点上下文
+            if (levelId) {
+                this._supplyButton.setLevelContext(levelId, waveIndex);
+            }
         }
         
         // Day11: 更新部署节奏指示器
@@ -650,7 +664,8 @@ export class BattleScene extends Component {
                 this.battleFlow.currentWave + 1,  // 已通过的波次
                 6,  // 总波次
                 this.BASE_SCRAP_REWARD,
-                () => this.onBackToLobby()
+                () => this.onBackToLobby(),
+                this.battleFlow.currentLevelId  // Day12: 传递关卡上下文
             );
         }
     }
@@ -675,7 +690,8 @@ export class BattleScene extends Component {
                 this.battleFlow.currentWave,
                 6,
                 this.BASE_SCRAP_REWARD,
-                () => this.onBackToLobby()
+                () => this.onBackToLobby(),
+                this.battleFlow.currentLevelId  // Day12: 传递关卡上下文
             );
         }
     }

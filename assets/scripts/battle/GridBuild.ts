@@ -13,6 +13,8 @@ import { BattleState } from './BattleFlow';
 import { PlaceholderGraphics, PLACEHOLDER_COLORS } from '../ui/PlaceholderGraphics';
 import { MetaData, rollMergeRefund } from '../data/MetaData';
 import { AudioService, SfxId } from '../audio/AudioService';
+import { Analytics } from '../analytics/Analytics';
+import { LevelId } from './WaveConfig';
 
 const { ccclass, property } = _decorator;
 
@@ -89,6 +91,10 @@ export class GridBuild extends Component {
     
     // 战斗状态引用（用于判断是否可操作）
     private _currentBattleState: BattleState = BattleState.None;
+    
+    // Day12: 当前关卡和波次（用于埋点）
+    private _currentLevelId: LevelId = LevelId.L1;
+    private _currentWaveIndex: number = 0;
     
     // 高亮的格子
     private _highlightedCell: GridPosition | null = null;
@@ -237,6 +243,9 @@ export class GridBuild extends Component {
             this._isMergeDragging = true;
             this._mergeDragSourcePos = gridPos;
             this._mergeDragTargetPos = null;
+            
+            // Day12: 埋点 - 合成尝试（开始拖拽）
+            Analytics.trackMergeAttempt(this._currentLevelId, this._currentWaveIndex);
             
             // 创建拖拽预览节点
             this.createMergeDragPreview(cell.building, localPos);
@@ -393,6 +402,14 @@ export class GridBuild extends Component {
     }
     
     /**
+     * Day12: 设置当前关卡和波次（用于埋点上下文）
+     */
+    setLevelContext(levelId: LevelId, waveIndex: number) {
+        this._currentLevelId = levelId;
+        this._currentWaveIndex = waveIndex;
+    }
+    
+    /**
      * 检查是否在部署阶段
      */
     get canDeploy(): boolean {
@@ -501,6 +518,9 @@ export class GridBuild extends Component {
             GameData.addDP(1);
             console.log(`[GridBuild] 补给加成: 合成返还 1 DP`);
         }
+        
+        // Day12: 埋点 - 合成成功
+        Analytics.trackMergeSuccess(this._currentLevelId, this._currentWaveIndex, targetBuilding.type);
         
         console.log(`[GridBuild] 合成成功: ${targetBuilding.type} 升级到 L2`);
         

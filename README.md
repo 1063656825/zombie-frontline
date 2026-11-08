@@ -1424,10 +1424,157 @@ npx vitest run tests/day11.test.ts
 
 ---
 
+## Day12 完成内容
+
+### ✅ Analytics 埋点模块
+
+```
+assets/scripts/analytics/
+└── Analytics.ts         # 埋点服务单例
+```
+
+**功能：**
+- `track(name, props)` 通用事件追踪
+- 内存 ring buffer (200 条事件)
+- 会话级统计汇总
+- 可选 `wx.reportAnalytics` 上报
+
+### ✅ 对局/波次追踪
+
+| 事件 | 说明 |
+|------|------|
+| `run_start` | 对局开始 |
+| `run_end` | 对局结束 (含 won/duration_ms/merge_count) |
+| `run_win` / `run_lose` | 胜利/失败 |
+| `first_run_complete` | 首次通关 |
+| `wave_start` | 波次开始 (算作尝试) |
+| `wave_clear` | 波次通关 |
+| `wave_fail` | 波次失败 (HP≤0) |
+
+### ✅ 广告三坑追踪
+
+| 事件 | 说明 |
+|------|------|
+| `ad_show` | 广告入口展示 |
+| `ad_click` | 用户点击广告 |
+| `ad_complete` | 广告完成、奖励发放 |
+| `ad_fail` | 广告失败/取消 |
+
+**三坑位：** Revive (复活) / SettleDouble (胜利双倍) / WaveSupply (波次补给)
+
+### ✅ 合成率追踪
+
+| 事件 | 说明 |
+|------|------|
+| `merge_attempt` | 开始拖拽 L1 建筑 |
+| `merge_success` | 合成成功 |
+| `revive_used` | 复活使用 |
+
+**统计 API：**
+- `getMergeRunRate()` — 有合成的对局占比
+- `getMergeSuccessRate()` — 合成成功率
+- `getWaveFailRate(level, wave)` — 波失败率
+- `getAdConversionRate(slot)` — 广告转化率
+
+### ✅ 埋点接入点
+
+- `BattleFlow.ts` — run_start/run_end, wave events, revive_used
+- `GridBuild.ts` — merge_attempt/merge_success
+- `RevivePanel.ts` — ad_show/click/complete/fail
+- `SettlePanel.ts` — ad_show/click/complete/fail
+- `SupplyButton.ts` — ad_show/click/complete/fail
+
+### ✅ 文档
+
+新增 `ANALYTICS.md`：
+- 完整事件目录
+- 验证指标对照表
+- API 使用示例
+- 调试说明
+
+### ✅ 单元测试
+
+新增 `tests/day12.test.ts`（37 个测试）：
+- 事件追踪核心功能
+- 对局生命周期追踪
+- 波次事件追踪
+- 广告三坑追踪
+- 合成率追踪
+- 复活追踪
+- 完整对局流程模拟
+
+---
+
+## Day12 验收步骤（Creator 必需）
+
+### 1. 事件日志输出
+
+1. 进入 Battle，打开浏览器控制台
+2. 观察输出：
+   ```
+   [Analytics] run_start {"level_id":"L1","run_index":1,"is_first_run":true}
+   [Analytics] wave_start {"level_id":"L1","wave_index":0}
+   ```
+
+### 2. 合成事件
+
+1. 放置两个同种 L1 建筑
+2. 开始拖拽合成
+3. 观察：
+   ```
+   [Analytics] merge_attempt {"level_id":"L1","wave_index":0}
+   [Analytics] merge_success {"level_id":"L1","wave_index":0,"building_type":"MachineGun"}
+   ```
+
+### 3. 广告三坑事件
+
+1. 复活广告：让 HP 归零，观察 `ad_show {slot: "revive"}`
+2. 双倍广告：胜利后观察 `ad_show {slot: "settle_double"}`
+3. 补给广告：DP<3 时观察 `ad_show {slot: "wave_supply"}`
+4. 点击广告后观察 `ad_click` → `ad_complete` 或 `ad_fail`
+
+### 4. 波失败事件
+
+1. 故意让据点 HP 归零
+2. 观察：
+   ```
+   [Analytics] wave_fail {"level_id":"L1","wave_index":2,"reason":"base_hp_zero"}
+   ```
+
+### 5. 单元测试
+
+```bash
+npx vitest run tests/day12.test.ts
+```
+
+确认全部通过（37 个测试）
+
+---
+
+## Day12 单元测试
+
+运行测试：
+```bash
+npx vitest run tests/day12.test.ts
+```
+
+测试覆盖（37 个）：
+- Analytics 核心功能
+- 对局生命周期追踪
+- 波次事件追踪
+- 广告三坑追踪
+- 合成率追踪
+- 复活追踪
+- 事件查询
+- 完整对局流程模拟
+- 枚举完整性
+
+---
+
 ## 联系方式
 
 如有问题，请联系项目负责人。
 
 ---
 
-*Last updated: Day11 部署双节奏动效与危险侧指示*
+*Last updated: Day12 波失败与广告三坑及合成率埋点*
