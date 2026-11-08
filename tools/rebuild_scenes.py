@@ -49,6 +49,10 @@ def ref(i):
     return {"__id__": i}
 
 
+def scene_asset(uuid: str):
+    return {"__uuid__": uuid, "__expectedType__": "cc.SceneAsset"}
+
+
 class SceneBuilder:
     def __init__(self, name: str):
         self.name = name
@@ -251,6 +255,7 @@ def build_boot():
     b.script(canvas, "BootScene", {
         "statusLabel": ref(status_lbl),
         "versionLabel": ref(ver_lbl),
+        "lobbyScene": scene_asset(UUID["Lobby.scene"]),
     })
     return b.finish()
 
@@ -277,6 +282,7 @@ def build_lobby():
         "scrapLabel": ref(scrap_lbl),
         "startBattleBtn": ref(start),
         "upgradeContainer": ref(canvas),
+        "battleScene": scene_asset(UUID["Battle.scene"]),
     })
     return b.finish()
 

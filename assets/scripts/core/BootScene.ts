@@ -1,13 +1,19 @@
 /**
  * BootScene.ts
  * 启动场景控制器
- * 负责初始化、资源预加载，然后自动跳转到 Lobby
+ * Creator 3.8.6: loadScene(name, onLaunched?, onUnloaded?) — 不是 (onBefore, onError)
  */
 
 import { _decorator, Component, Label, director, assetManager, SceneAsset } from 'cc';
 import { GameData } from '../data/GameData';
 import { SCENE_LOBBY } from './SceneManager';
-import { MIN_BOOT_TIME, shouldJumpFromBoot, LOBBY_SCENE_UUID } from './BootGate';
+import {
+    MIN_BOOT_TIME,
+    shouldJumpFromBoot,
+    shouldFallbackToUuid,
+    launchedCallbackHasError,
+    LOBBY_SCENE_UUID
+} from './BootGate';
 
 const { ccclass, property } = _decorator;
 
@@ -20,11 +26,17 @@ export class BootScene extends Component {
     @property(Label)
     versionLabel: Label | null = null;
     
+    /**
+     * 序列化引用 Lobby.scene，让「预览当前 Boot」也会把 Lobby 打进预览包。
+     */
+    @property(SceneAsset)
+    lobbyScene: SceneAsset | null = null;
+    
     private readonly MIN_BOOT_TIME = MIN_BOOT_TIME;
     private _bootTimer = 0;
     private _isReady = false;
-    /** 只发起一次 loadScene，避免每帧重入把预览卡在加载页 */
     private _jumpStarted = false;
+    private _uuidLoadStarted = false;
     
     start() {
         console.log('[BootScene] 启动场景开始');
@@ -36,7 +48,6 @@ export class BootScene extends Component {
         this.setStatus('正在初始化...');
         this.initGame();
         
-        // 双保险：scheduleOnce 不依赖 update；update 闸门防止漏触发
         if (this._isReady) {
             this.scheduleOnce(() => this.gotoLobby(), this.MIN_BOOT_TIME);
         }
@@ -46,12 +57,9 @@ export class BootScene extends Component {
         try {
             this.setStatus('加载存档...');
             console.log(`[BootScene] 当前残骸: ${GameData.scrap}`);
-            
             this.setStatus('预加载资源...');
-            
             this._isReady = true;
             this.setStatus('准备就绪');
-            
         } catch (e) {
             console.error('[BootScene] 初始化失败:', e);
             this.setStatus('初始化失败，请重试');
@@ -77,46 +85,83 @@ export class BootScene extends Component {
     }
     
     private gotoLobby() {
-        if (this._jumpStarted) {
-            return;
-        }
-        if (!this._isReady) {
+        if (this._jumpStarted || !this._isReady) {
             return;
         }
         this._jumpStarted = true;
         this.setStatus('进入大厅...');
         console.log(`[BootScene] 跳转到大厅: ${SCENE_LOBBY}`);
         
-        director.loadScene(SCENE_LOBBY, () => {
-            console.log('[BootScene] Lobby onBeforeLoadScene');
-        }, (err: Error | null) => {
-            if (!err) {
-                console.log('[BootScene] Lobby 加载成功');
+        // 1) 预览包已带上序列化的 Lobby 资源：直接切，不依赖 name 表
+        if (this.lobbyScene) {
+            console.log('[BootScene] 使用序列化 Lobby SceneAsset');
+            if (this.runLobbyAsset(this.lobbyScene)) {
                 return;
             }
-            console.warn('[BootScene] loadScene(Lobby) 失败，尝试 UUID 回退:', err);
+            console.warn('[BootScene] 序列化 SceneAsset 切换失败，继续 loadScene / UUID');
+        }
+        
+        // 2) 3.8.6: loadScene(name, onLaunched, onUnloaded) — 第二参是启动完成，不是 onError
+        let accepted = true;
+        try {
+            accepted = director.loadScene(SCENE_LOBBY, (err: Error | null) => {
+                if (launchedCallbackHasError(err)) {
+                    console.warn('[BootScene] onLaunched 报错，UUID 回退:', err);
+                    this.loadLobbyByUuid();
+                    return;
+                }
+                console.log('[BootScene] loadScene(Lobby) 成功');
+            });
+        } catch (e) {
+            console.warn('[BootScene] loadScene 抛错:', e);
+            accepted = false;
+        }
+        
+        if (shouldFallbackToUuid(accepted, false)) {
+            console.warn('[BootScene] loadScene 返回 false，立即 UUID 回退');
             this.loadLobbyByUuid();
+        }
+    }
+    
+    private loadLobbyByUuid() {
+        if (this._uuidLoadStarted) {
+            return;
+        }
+        this._uuidLoadStarted = true;
+        assetManager.loadAny({ uuid: LOBBY_SCENE_UUID }, (err: Error | null, asset: SceneAsset) => {
+            if (err || !asset) {
+                assetManager.loadAny(LOBBY_SCENE_UUID, (err2: Error | null, asset2: SceneAsset) => {
+                    if (err2 || !asset2) {
+                        console.error('[BootScene] UUID 加载 Lobby 失败:', err2 || err);
+                        this.setStatus('大厅加载失败（Lobby 场景）');
+                        return;
+                    }
+                    if (!this.runLobbyAsset(asset2)) {
+                        this.setStatus('进入大厅失败');
+                    }
+                });
+                return;
+            }
+            if (!this.runLobbyAsset(asset)) {
+                this.setStatus('进入大厅失败');
+            }
         });
     }
     
-    /**
-     * 预览「当前场景」时有时不把其它场景打进 name 表；用 Lobby.scene.meta UUID 再拉一次。
-     */
-    private loadLobbyByUuid() {
-        assetManager.loadAny({ uuid: LOBBY_SCENE_UUID }, (err: Error | null, asset: SceneAsset) => {
-            if (err || !asset) {
-                console.error('[BootScene] UUID 加载 Lobby 失败:', err);
-                this.setStatus('大厅加载失败（Lobby 场景）');
-                return;
+    private runLobbyAsset(asset: SceneAsset): boolean {
+        try {
+            director.runSceneImmediate(asset);
+            console.log('[BootScene] runSceneImmediate(Lobby) 完成');
+            return true;
+        } catch (e) {
+            console.error('[BootScene] runSceneImmediate 失败，尝试 runScene:', e);
+            try {
+                director.runScene(asset);
+                return true;
+            } catch (e2) {
+                console.error('[BootScene] runScene(Lobby) 失败:', e2);
+                return false;
             }
-            director.runScene(asset, null, (runErr: Error | null) => {
-                if (runErr) {
-                    console.error('[BootScene] runScene(Lobby) 失败:', runErr);
-                    this.setStatus('进入大厅失败');
-                    return;
-                }
-                console.log('[BootScene] Lobby runScene 成功');
-            });
-        });
+        }
     }
 }

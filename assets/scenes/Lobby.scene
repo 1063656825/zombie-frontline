@@ -600,6 +600,10 @@
     "upgradeContainer": {
       "__id__": 4
     },
+    "battleScene": {
+      "__uuid__": "a0000001-0000-4000-8000-000000000003",
+      "__expectedType__": "cc.SceneAsset"
+    },
     "_name": "",
     "_objFlags": 0,
     "_enabled": true,

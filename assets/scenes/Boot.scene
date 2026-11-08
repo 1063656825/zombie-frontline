@@ -510,6 +510,10 @@
     "versionLabel": {
       "__id__": 16
     },
+    "lobbyScene": {
+      "__uuid__": "a0000001-0000-4000-8000-000000000002",
+      "__expectedType__": "cc.SceneAsset"
+    },
     "_name": "",
     "_objFlags": 0,
     "_enabled": true,

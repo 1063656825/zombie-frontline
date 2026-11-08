@@ -129,11 +129,11 @@ supply: 0-5;      // 补给线（开局 DP 加成）
 
 ### 预览运行
 
-1. 在项目管理器中双击 `assets/scenes/Boot.scene` 打开启动场景
+1. 在项目管理器中双击 `assets/scenes/Boot.scene` 打开启动场景（只开 Boot 即可，不必先打开 Lobby）
 2. 点击编辑器顶部的「预览」按钮（或按 F5）
-3. 浏览器应先显示「尸潮防线」加载页，约 1.5 秒进入大厅
+3. 浏览器应先显示「尸潮防线」加载页，约 1.5 秒进入大厅（「开始战斗」）
 
-若出现 `this._children[i]._onBatchCreated is not a function`：那是旧手写 scene 把 **组件** 写进了 `_children`。当前仓库已修好。请关掉 Creator，删除项目下 `library/` 与 `temp/` 后重新打开（场景 UUID / 脚本 `.meta` 已固定）。详情见 `CREATOR_QA.md` §0。
+若仍停在加载页或出现 `this._children[i]._onBatchCreated is not a function`：关掉 Creator，删除项目下 `library/` 与 `temp/` 后重新打开再预览 Boot（场景 UUID / 脚本 `.meta` 已固定）。详情见 `CREATOR_QA.md` §0。
 
 ---
 

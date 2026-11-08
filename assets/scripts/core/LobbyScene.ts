@@ -5,7 +5,7 @@
  * Day9: 关卡选择 UI
  */
 
-import { _decorator, Component, Label, director, Node, Graphics, Color, UITransform } from 'cc';
+import { _decorator, Component, Label, director, Node, Graphics, Color, UITransform, SceneAsset, assetManager } from 'cc';
 import { GameData, GameEvents, EVENT_SCRAP_CHANGED } from '../data/GameData';
 import { 
     MetaData, 
@@ -18,6 +18,7 @@ import {
 } from '../data/MetaData';
 import { SCENE_BATTLE } from './SceneManager';
 import { LevelId, getLevelConfig, LEVEL_CONFIGS } from '../battle/WaveConfig';
+import { BATTLE_SCENE_UUID, launchedCallbackHasError, shouldFallbackToUuid } from './BootGate';
 
 const { ccclass, property } = _decorator;
 
@@ -42,6 +43,12 @@ export class LobbyScene extends Component {
     
     @property(Node)
     upgradeContainer: Node | null = null;
+    
+    /** 序列化引用 Battle.scene，预览从 Boot 进来时也能打进包 */
+    @property(SceneAsset)
+    battleScene: SceneAsset | null = null;
+    
+    private _battleJumpStarted = false;
     
     // 升级行 UI
     private _firepowerRow: UpgradeRowUI | null = null;
@@ -446,14 +453,69 @@ export class LobbyScene extends Component {
     
     /**
      * 开始战斗
+     * Creator 3.8.6: loadScene(name, onLaunched?, onUnloaded?)；预览当前场景时按名常失败。
      */
     private onStartBattle() {
+        if (this._battleJumpStarted) {
+            return;
+        }
+        this._battleJumpStarted = true;
+        
         // Day9: 设置当前关卡
         GameData.currentLevel = this._selectedLevel;
         
         console.log('[LobbyScene] 开始战斗');
         console.log(`[LobbyScene] 选中关卡: ${this._selectedLevel}`);
         console.log(`[LobbyScene] 当前三线: 火力=${MetaData.firepowerLevel}, 城防=${MetaData.fortLevel}, 补给=${MetaData.supplyLevel}`);
-        director.loadScene(SCENE_BATTLE);
+        
+        if (this.battleScene) {
+            this.runBattleAsset(this.battleScene);
+            return;
+        }
+        
+        let accepted = true;
+        try {
+            accepted = director.loadScene(SCENE_BATTLE, (err: Error | null) => {
+                if (launchedCallbackHasError(err)) {
+                    console.warn('[LobbyScene] onLaunched 报错，UUID 回退:', err);
+                    this.loadBattleByUuid();
+                    return;
+                }
+                console.log('[LobbyScene] loadScene(Battle) 成功');
+            });
+        } catch (e) {
+            console.warn('[LobbyScene] loadScene 抛错:', e);
+            accepted = false;
+        }
+        
+        if (shouldFallbackToUuid(accepted, false)) {
+            console.warn('[LobbyScene] loadScene 返回 false，立即 UUID 回退');
+            this.loadBattleByUuid();
+        }
+    }
+    
+    private loadBattleByUuid() {
+        assetManager.loadAny({ uuid: BATTLE_SCENE_UUID }, (err: Error | null, asset: SceneAsset) => {
+            if (err || !asset) {
+                console.error('[LobbyScene] UUID 加载 Battle 失败:', err);
+                this._battleJumpStarted = false;
+                return;
+            }
+            this.runBattleAsset(asset);
+        });
+    }
+    
+    private runBattleAsset(asset: SceneAsset) {
+        try {
+            director.runSceneImmediate(asset);
+        } catch (e) {
+            console.error('[LobbyScene] runSceneImmediate 失败，尝试 runScene:', e);
+            try {
+                director.runScene(asset);
+            } catch (e2) {
+                console.error('[LobbyScene] runScene(Battle) 失败:', e2);
+                this._battleJumpStarted = false;
+            }
+        }
     }
 }
