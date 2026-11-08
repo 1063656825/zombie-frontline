@@ -87,6 +87,9 @@ export class BattleScene extends Component {
     // Day11: 危险侧指示器
     private _dangerSideIndicator: DangerSideIndicator | null = null;
     
+    // Day13: 危险侧坐标复用缓冲
+    private _dangerPosBuffer: EnemyPosition[] = [];
+    
     // 主角朝向指示器
     private _aimIndicator: Node | null = null;
     
@@ -141,6 +144,12 @@ export class BattleScene extends Component {
     
     onDestroy() {
         this.removeEventListeners();
+        if (this.combat) {
+            this.combat.clearAll();
+        }
+        if (this.enemyWave) {
+            this.enemyWave.stopWave();
+        }
     }
     
     /**
@@ -160,11 +169,7 @@ export class BattleScene extends Component {
         if (this._dangerSideIndicator && this.combat && this.battleFlow) {
             const state = this.battleFlow.state;
             if (state === BattleState.Combat) {
-                const enemies = this.combat.getAllEnemies();
-                const positions: EnemyPosition[] = enemies.map(e => ({
-                    x: e.position.x,
-                    y: e.position.y
-                }));
+                const positions = this.combat.fillEnemyPositions(this._dangerPosBuffer);
                 this._dangerSideIndicator.updateDanger(positions);
             }
         }
@@ -678,6 +683,10 @@ export class BattleScene extends Component {
         
         if (this.combat) {
             this.combat.setActive(false);
+            this.combat.clearAll();
+        }
+        if (this.enemyWave) {
+            this.enemyWave.stopWave();
         }
         
         // Day9: 失败视觉反馈

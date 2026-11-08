@@ -151,18 +151,52 @@ export class PlaceholderGraphics extends Component {
                 size = 25;
         }
         
-        graphics.fillColor = color;
-        
-        // 敌人用圆形
-        graphics.circle(0, 0, size / 2);
-        graphics.fill();
-        
-        // 边框
-        graphics.strokeColor = new Color(50, 50, 50, 200);
-        graphics.lineWidth = 2;
-        graphics.stroke();
+        PlaceholderGraphics.drawEnemyGraphics(graphics, color, size);
         
         return node;
+    }
+    
+    /**
+     * Day13: 复用已有敌人节点时重绘外观（避免 destroy + new Node）
+     */
+    static restyleEnemy(node: Node, type: EnemyType): void {
+        node.name = `Enemy_${type}`;
+        const graphics = node.getComponent(Graphics);
+        if (!graphics) return;
+        
+        let color: Color;
+        let size: number;
+        
+        switch (type) {
+            case EnemyType.Z1_Walker:
+                color = PLACEHOLDER_COLORS.Z1_WALKER;
+                size = 25;
+                break;
+            case EnemyType.Z2_Runner:
+                color = PLACEHOLDER_COLORS.Z2_RUNNER;
+                size = 22;
+                break;
+            case EnemyType.Z3_Tank:
+                color = PLACEHOLDER_COLORS.Z3_TANK;
+                size = 40;
+                break;
+            default:
+                color = new Color(128, 128, 128, 255);
+                size = 25;
+        }
+        
+        PlaceholderGraphics.drawEnemyGraphics(graphics, color, size);
+    }
+    
+    private static drawEnemyGraphics(graphics: Graphics, color: Color, size: number) {
+        graphics.clear();
+        graphics.fillColor = color;
+        graphics.circle(0, 0, size / 2);
+        graphics.fill();
+        graphics.strokeColor = new Color(50, 50, 50, 200);
+        graphics.lineWidth = 2;
+        graphics.circle(0, 0, size / 2);
+        graphics.stroke();
     }
     
     /**

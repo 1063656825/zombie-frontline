@@ -1,10 +1,12 @@
 /**
  * ExplosionVFX.ts
  * Day8: 炮轰爆炸圈视觉效果
+ * Day13: 节点池复用，播放完毕归还而非 destroy
  */
 
-import { _decorator, Component, Node, Graphics, Color, UITransform, tween, Vec3 } from 'cc';
+import { _decorator, Component, Node, Graphics, Color, UITransform, tween, Tween, Vec3 } from 'cc';
 import { BuildingLevel, getBuildingConfig, BuildingType } from '../battle/BuildingConfig';
+import { ObjectPool } from '../core/ObjectPool';
 
 const { ccclass, property } = _decorator;
 
@@ -30,7 +32,7 @@ export function getCannonAoeRadiusPixels(level: BuildingLevel): number {
 
 /**
  * 炮轰爆炸圈组件
- * 创建后自动播放并销毁
+ * Day13: 播放完毕回调归还对象池，不销毁节点
  */
 @ccclass('ExplosionRing')
 export class ExplosionRing extends Component {
@@ -39,30 +41,50 @@ export class ExplosionRing extends Component {
     private _radius: number = 64;
     private _color: Color = new Color(255, 150, 50, 200);
     private _duration: number = EXPLOSION_DURATION;
+    private _animProxy = { progress: 0 };
+    private _onFinished: (() => void) | null = null;
     
     /**
      * 初始化并播放爆炸效果
      */
-    init(radius: number, color?: Color, duration?: number) {
+    init(radius: number, color?: Color, duration?: number, onFinished?: () => void) {
         this._radius = radius;
         if (color) this._color = color;
         if (duration) this._duration = duration;
+        this._onFinished = onFinished ?? null;
         
-        // 添加 UITransform
+        // 添加 UITransform（复用时跳过）
         let transform = this.node.getComponent(UITransform);
         if (!transform) {
             transform = this.node.addComponent(UITransform);
         }
         transform.setContentSize(radius * 2.5, radius * 2.5);
         
-        // 添加 Graphics
-        this._graphics = this.node.addComponent(Graphics);
+        // 添加 Graphics（复用时跳过）
+        this._graphics = this.node.getComponent(Graphics);
+        if (!this._graphics) {
+            this._graphics = this.node.addComponent(Graphics);
+        }
         
-        // 绘制初始圈
+        // 停止上次动画，避免回收后仍回调
+        Tween.stopAllByTarget(this._animProxy);
+        Tween.stopAllByTarget(this.node);
+        
+        this._animProxy.progress = 0;
         this.drawRing(this._radius, this._color.a);
-        
-        // 播放动画
         this.playAnimation();
+    }
+    
+    /**
+     * Day13: 立即停止动画（回收前调用）
+     */
+    stop() {
+        Tween.stopAllByTarget(this._animProxy);
+        Tween.stopAllByTarget(this.node);
+        this._onFinished = null;
+        if (this._graphics) {
+            this._graphics.clear();
+        }
     }
     
     private drawRing(radius: number, opacity: number) {
@@ -70,17 +92,13 @@ export class ExplosionRing extends Component {
         
         this._graphics.clear();
         
-        // 设置颜色
-        const drawColor = this._color.clone();
-        drawColor.a = opacity;
+        const drawColor = this._color;
         
-        // 绘制填充圆（半透明）
         this._graphics.fillColor = new Color(drawColor.r, drawColor.g, drawColor.b, opacity * 0.3);
         this._graphics.circle(0, 0, radius);
         this._graphics.fill();
         
-        // 绘制边缘圈
-        this._graphics.strokeColor = drawColor;
+        this._graphics.strokeColor = new Color(drawColor.r, drawColor.g, drawColor.b, opacity);
         this._graphics.lineWidth = 3;
         this._graphics.circle(0, 0, radius);
         this._graphics.stroke();
@@ -89,11 +107,9 @@ export class ExplosionRing extends Component {
     private playAnimation() {
         const startRadius = this._radius;
         const endRadius = this._radius * EXPLOSION_EXPAND_RATIO;
+        this._animProxy.progress = 0;
         
-        // 使用代理对象来 tween
-        const proxy = { progress: 0 };
-        
-        tween(proxy)
+        tween(this._animProxy)
             .to(this._duration, { progress: 1 }, {
                 onUpdate: (target: { progress: number }) => {
                     if (!this.node.isValid) return;
@@ -106,11 +122,90 @@ export class ExplosionRing extends Component {
                 }
             })
             .call(() => {
-                if (this.node.isValid) {
-                    this.node.destroy();
-                }
+                const cb = this._onFinished;
+                this._onFinished = null;
+                cb?.();
             })
             .start();
+    }
+}
+
+/**
+ * Day13: 爆炸圈节点池
+ */
+export class ExplosionVfxPool {
+    private _pool: ObjectPool<Node>;
+    private _parent: Node;
+    
+    constructor(parent: Node) {
+        this._parent = parent;
+        this._pool = new ObjectPool<Node>({
+            create: () => this.createNode(),
+            onAcquire: (node) => {
+                node.active = true;
+            },
+            onRelease: (node) => {
+                const ring = node.getComponent(ExplosionRing);
+                ring?.stop();
+                node.active = false;
+            },
+            initialSize: 6
+        });
+    }
+    
+    private createNode(): Node {
+        const node = new Node('ExplosionRing');
+        node.parent = this._parent;
+        node.addComponent(UITransform);
+        node.addComponent(Graphics);
+        node.addComponent(ExplosionRing);
+        node.active = false;
+        return node;
+    }
+    
+    prewarm(count: number): void {
+        this._pool.prewarm(count);
+    }
+    
+    /**
+     * 在指定位置播放爆炸圈，结束后自动归还
+     */
+    play(position: Vec3, radius: number, color: Color, duration?: number): Node {
+        const node = this._pool.acquire();
+        if (node.parent !== this._parent) {
+            node.parent = this._parent;
+        }
+        node.setPosition(position);
+        
+        let ring = node.getComponent(ExplosionRing);
+        if (!ring) {
+            ring = node.addComponent(ExplosionRing);
+        }
+        ring.init(radius, color, duration, () => {
+            this._pool.release(node);
+        });
+        return node;
+    }
+    
+    playCannon(position: Vec3, level: BuildingLevel, color?: Color): Node {
+        const radius = getCannonAoeRadiusPixels(level);
+        const explosionColor = color ?? new Color(255, 150, 50, EXPLOSION_START_OPACITY);
+        return this.play(position, radius, explosionColor);
+    }
+    
+    playMine(position: Vec3, level: BuildingLevel): Node {
+        const config = getBuildingConfig(BuildingType.Mine, level);
+        const radius = config?.triggerRadius ? config.triggerRadius * 40 : 48;
+        const explosionColor = new Color(180, 100, 255, EXPLOSION_START_OPACITY);
+        return this.play(position, radius, explosionColor, 0.25);
+    }
+    
+    releaseAll(): void {
+        this._pool.releaseAll();
+    }
+    
+    getStats() {
+        return this._pool.getStats();
     }
 }
 
@@ -120,25 +215,18 @@ export class ExplosionRing extends Component {
  * @param position 世界位置
  * @param level 炮轰等级（决定半径）
  * @param color 可选颜色覆盖
+ * @param pool 可选对象池（Day13）；缺省时走池化共享实例
  */
 export function createExplosionRing(
     parent: Node,
     position: Vec3,
     level: BuildingLevel,
-    color?: Color
+    color?: Color,
+    pool?: ExplosionVfxPool
 ): Node {
-    const node = new Node('ExplosionRing');
-    node.parent = parent;
-    node.setPosition(position);
-    
-    const radius = getCannonAoeRadiusPixels(level);
-    const explosionColor = color ?? new Color(255, 150, 50, EXPLOSION_START_OPACITY);
-    
-    const ring = node.addComponent(ExplosionRing);
-    ring.init(radius, explosionColor);
-    
-    console.log(`[ExplosionVFX] 爆炸圈 L${level} 半径=${radius}px`);
-    
+    const p = pool ?? getSharedExplosionPool(parent);
+    const node = p.playCannon(position, level, color);
+    console.log(`[ExplosionVFX] 爆炸圈 L${level} 半径=${getCannonAoeRadiusPixels(level)}px`);
     return node;
 }
 
@@ -148,21 +236,29 @@ export function createExplosionRing(
 export function createMineExplosion(
     parent: Node,
     position: Vec3,
-    level: BuildingLevel
+    level: BuildingLevel,
+    pool?: ExplosionVfxPool
 ): Node {
+    const p = pool ?? getSharedExplosionPool(parent);
+    const node = p.playMine(position, level);
     const config = getBuildingConfig(BuildingType.Mine, level);
     const radius = config?.triggerRadius ? config.triggerRadius * 40 : 48;
-    
-    const node = new Node('MineExplosion');
-    node.parent = parent;
-    node.setPosition(position);
-    
-    const explosionColor = new Color(180, 100, 255, EXPLOSION_START_OPACITY);
-    
-    const ring = node.addComponent(ExplosionRing);
-    ring.init(radius, explosionColor, 0.25);
-    
     console.log(`[ExplosionVFX] 地雷爆炸 L${level} 半径=${radius}px`);
-    
     return node;
+}
+
+let _sharedPool: ExplosionVfxPool | null = null;
+
+function getSharedExplosionPool(parent: Node): ExplosionVfxPool {
+    if (!_sharedPool) {
+        _sharedPool = new ExplosionVfxPool(parent);
+    }
+    return _sharedPool;
+}
+
+/**
+ * Day13: 战斗清场时归还共享爆炸池
+ */
+export function releaseSharedExplosionPool(): void {
+    _sharedPool?.releaseAll();
 }

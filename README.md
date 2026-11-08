@@ -1571,10 +1571,97 @@ npx vitest run tests/day12.test.ts
 
 ---
 
+## Day13 完成内容
+
+### ✅ 对象池（战斗热路径）
+
+```
+assets/scripts/core/ObjectPool.ts     # 通用池 + ReusableList（无 cc，vitest 可 import）
+assets/scripts/effects/ExplosionVFX.ts  # ExplosionVfxPool，播完归还
+assets/scripts/battle/Combat.ts         # 敌人节点/数据池、弹体数据池、热循环缓冲
+assets/scripts/battle/EnemyWave.ts      # 出生点 Vec3 复用、SpawnQueueItem 归还
+```
+
+**池化对象：**
+| 池 | 预热 | 归还时机 |
+|----|------|----------|
+| 敌人 Node + EnemyInstance | 12 | 击杀 / `clearAll` |
+| 爆炸圈 / 地雷 VFX | 6 | 动画结束 / `clearAll` |
+| Projectile 数据 | 8 | lifetime / `clearAll`（开火仍即时命中） |
+| SpawnQueueItem | 按波增长 | `stopWave` |
+
+**有意未池化：** Grid 落子/合成节点（低频）、失败红闪（一次）。
+
+### ✅ 分配卫生
+
+- 敌人移动 / 扇形索敌：复用 `_tmpVecA/B`
+- `findEnemiesInRange/Cone`、`getAllBuildings`、危险侧坐标：复用数组
+- 路径点只读共享，不再每只怪 clone
+- 回收时 `Tween.stopAllByTarget`，避免闪白/击退回调打到复用节点
+
+### ✅ 安全拆场
+
+- `Combat.clearAll` / `onDestroy` 归还全部池对象
+- 胜利、失败、返回大厅、复活重开波都会清场
+- 详见 `PERFORMANCE.md`
+
+### ✅ 单元测试
+
+`tests/day13.test.ts` 直接 import `ObjectPool`（非镜像）。
+
+---
+
+## Day13 验收步骤（Creator 必需）
+
+### 1. 池化可见性
+
+1. 预览 Battle，打开 Hierarchy
+2. 开战后击杀敌人：节点应变为隐藏复用，而不是从树中销毁再新建
+3. 炮轰命中后 `ExplosionRing` 数量有上限
+
+### 2. 清场
+
+1. 清波 / 失败 / 返回大厅
+2. 控制台：`[Combat] 已清空所有战斗实体（池归还）`
+3. 再进战斗无残留敌人或爆炸圈
+
+### 3. Profiler（真机/微信）
+
+见 `PERFORMANCE.md`：高潮波目标 ~30fps。VM 无 Creator，此项必须人测。
+
+### 4. 单元测试
+
+```bash
+npx vitest run tests/day13.test.ts
+npx tsc -p tsconfig.test.json --noEmit
+```
+
+---
+
+## Day13 单元测试
+
+运行测试：
+```bash
+npx vitest run tests/day13.test.ts
+```
+
+测试覆盖：
+- acquire/release 复用同一实例
+- 池空扩容
+- 重复 release 安全
+- prewarm
+- releaseAll 清波后 capacity = created
+- maxIdle
+- ReusableList clear 保留 capacity
+- 波次风格模拟（生成/击杀/清波）
+- VFX 池播放后归还
+
+---
+
 ## 联系方式
 
 如有问题，请联系项目负责人。
 
 ---
 
-*Last updated: Day12 波失败与广告三坑及合成率埋点*
+*Last updated: Day13 对象池与战斗热路径分配卫生*

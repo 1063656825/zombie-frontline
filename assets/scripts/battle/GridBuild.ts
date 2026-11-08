@@ -102,6 +102,10 @@ export class GridBuild extends Component {
     // 首次可合成事件是否已触发
     private _mergeAvailableEmitted = false;
     
+    // Day13: 建筑列表缓存，避免每帧 Array.from
+    private _buildingCache: PlacedBuilding[] = [];
+    private _buildingCacheDirty = true;
+    
     /**
      * 初始化网格
      */
@@ -109,6 +113,8 @@ export class GridBuild extends Component {
         this._grid = [];
         this._buildings.clear();
         this._cellNodes.clear();
+        this._buildingCache.length = 0;
+        this._buildingCacheDirty = true;
         
         // 设置建筑容器
         if (buildingContainer) {
@@ -753,6 +759,7 @@ export class GridBuild extends Component {
             node: null  // Day2 创建实际节点
         };
         this._buildings.set(id, building);
+        this._buildingCacheDirty = true;
         return building;
     }
     
@@ -773,6 +780,7 @@ export class GridBuild extends Component {
         cell.building = null;
         cell.isOccupied = false;
         
+        this._buildingCacheDirty = true;
         GridEvents.emit(EVENT_BUILDING_REMOVED, building);
         return true;
     }
@@ -820,7 +828,15 @@ export class GridBuild extends Component {
      * 获取所有建筑
      */
     getAllBuildings(): PlacedBuilding[] {
-        return Array.from(this._buildings.values());
+        if (this._buildingCacheDirty) {
+            const cache = this._buildingCache;
+            cache.length = 0;
+            for (const b of this._buildings.values()) {
+                cache.push(b);
+            }
+            this._buildingCacheDirty = false;
+        }
+        return this._buildingCache;
     }
     
     /**
@@ -853,6 +869,8 @@ export class GridBuild extends Component {
             }
         }
         
+        this._buildingCache.length = 0;
+        this._buildingCacheDirty = true;
         console.log('[GridBuild] 已清空所有建筑');
     }
 }

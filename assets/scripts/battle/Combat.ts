@@ -3,9 +3,10 @@
  * 战斗系统
  * Day3: 敌人移动、建筑开火、地雷触发、主角射击
  * Day8: 受击闪白、击退、炮轰爆炸圈、音效
+ * Day13: 敌人/弹体/VFX 对象池 + 热路径复用缓冲
  */
 
-import { _decorator, Component, Node, Vec3, EventTarget, Graphics, Color, UITransform } from 'cc';
+import { _decorator, Component, Node, Vec3, EventTarget, Graphics, Color, UITransform, Tween } from 'cc';
 import { EnemyType, ENEMY_STATS } from './WaveConfig';
 import { BuildingType, getBuildingConfig, BuildingLevel } from './BuildingConfig';
 import { GameData } from '../data/GameData';
@@ -20,8 +21,9 @@ import {
     animateKnockback,
     FLASH_DURATION_DEFAULT 
 } from '../effects/HitEffects';
-import { createExplosionRing, createMineExplosion } from '../effects/ExplosionVFX';
+import { createExplosionRing, createMineExplosion, ExplosionVfxPool, releaseSharedExplosionPool } from '../effects/ExplosionVFX';
 import { AudioService, SfxId } from '../audio/AudioService';
+import { ObjectPool } from '../core/ObjectPool';
 
 const { ccclass, property } = _decorator;
 
@@ -140,6 +142,111 @@ export class Combat extends Component {
     // 击杀回调
     private _onEnemyKilledCallback: (() => void) | null = null;
     
+    // Day13: 对象池
+    private _enemyNodePool: ObjectPool<Node> | null = null;
+    private _enemyDataPool: ObjectPool<EnemyInstance> | null = null;
+    private _projectilePool: ObjectPool<Projectile> | null = null;
+    private _vfxPool: ExplosionVfxPool | null = null;
+    
+    // Day13: 热路径复用缓冲，避免每帧 new Vec3 / new Array
+    private readonly _tmpVecA = new Vec3();
+    private readonly _tmpVecB = new Vec3();
+    private readonly _rangeBuffer: EnemyInstance[] = [];
+    private readonly _coneBuffer: EnemyInstance[] = [];
+    private readonly _enemyListBuffer: EnemyInstance[] = [];
+    private readonly _minesToRemove: GridPosition[] = [];
+    
+    /**
+     * Day13: 初始化对象池（首次激活或首次生成时）
+     */
+    private ensurePools() {
+        const container = this.enemyContainer || this.node;
+        
+        if (!this._enemyNodePool) {
+            this._enemyNodePool = new ObjectPool<Node>({
+                create: () => {
+                    const n = PlaceholderGraphics.createEnemy(container, EnemyType.Z1_Walker);
+                    n.active = false;
+                    return n;
+                },
+                onAcquire: (n) => {
+                    n.active = true;
+                },
+                onRelease: (n) => {
+                    Tween.stopAllByTarget(n);
+                    n.active = false;
+                },
+                initialSize: 12
+            });
+        }
+        
+        if (!this._enemyDataPool) {
+            this._enemyDataPool = new ObjectPool<EnemyInstance>({
+                create: () => ({
+                    id: '',
+                    type: EnemyType.Z1_Walker,
+                    hp: 0,
+                    maxHp: 0,
+                    position: new Vec3(),
+                    node: null,
+                    isDead: false,
+                    currentPathIndex: 0,
+                    pathPoints: []
+                }),
+                onRelease: (e) => {
+                    e.isDead = true;
+                    e.node = null;
+                    e.hp = 0;
+                },
+                initialSize: 12
+            });
+        }
+        
+        if (!this._projectilePool) {
+            this._projectilePool = new ObjectPool<Projectile>({
+                create: () => ({
+                    id: '',
+                    sourceType: 'building',
+                    sourceId: '',
+                    damage: 0,
+                    position: new Vec3(),
+                    velocity: new Vec3(),
+                    target: null,
+                    isAOE: false,
+                    aoeRadius: 0,
+                    tankBonus: 1,
+                    node: null,
+                    lifetime: 0
+                }),
+                onRelease: (p) => {
+                    if (p.node) {
+                        Tween.stopAllByTarget(p.node);
+                        p.node.active = false;
+                    }
+                    p.target = null;
+                    p.lifetime = 0;
+                },
+                initialSize: 8
+            });
+        }
+        
+        if (!this._vfxPool) {
+            this._vfxPool = new ExplosionVfxPool(container);
+        }
+    }
+    
+    /**
+     * Day13: Creator Profiler 用池统计
+     */
+    getPoolStats() {
+        return {
+            enemyNodes: this._enemyNodePool?.getStats() ?? null,
+            enemyData: this._enemyDataPool?.getStats() ?? null,
+            projectiles: this._projectilePool?.getStats() ?? null,
+            vfx: this._vfxPool?.getStats() ?? null
+        };
+    }
+    
     /**
      * 设置击杀回调
      */
@@ -147,11 +254,22 @@ export class Combat extends Component {
         this._onEnemyKilledCallback = callback;
     }
     
+    onDestroy() {
+        this.clearAll();
+        this._enemyNodePool?.reset();
+        this._enemyDataPool?.reset();
+        this._projectilePool?.reset();
+        this._vfxPool?.releaseAll();
+    }
+    
     /**
      * 激活/停用战斗系统
      */
     setActive(active: boolean) {
         this._isActive = active;
+        if (active) {
+            this.ensurePools();
+        }
         console.log(`[Combat] 战斗系统: ${active ? '激活' : '停用'}`);
     }
     
@@ -159,32 +277,26 @@ export class Combat extends Component {
      * 生成敌人
      */
     spawnEnemy(type: EnemyType, spawnPosition: Vec3, useLeftPath: boolean = true): EnemyInstance {
+        this.ensurePools();
+        
         const stats = ENEMY_STATS[type];
         const id = `enemy_${++this._enemyIdCounter}`;
         
-        // 选择路径
-        const pathTemplate = useLeftPath ? this.PATH_LEFT : this.PATH_RIGHT;
-        const pathPoints = pathTemplate.map(p => ({
-            position: p.position.clone(),
-            isEnd: p.isEnd
-        }));
+        // 路径点只读共享，不再每只敌人 clone 一份
+        const pathPoints = useLeftPath ? this.PATH_LEFT : this.PATH_RIGHT;
+        const start = pathPoints[0].position;
         
-        // 设置起始位置为路径第一个点
-        const startPos = pathPoints[0].position.clone();
+        const enemy = this._enemyDataPool!.acquire();
+        enemy.id = id;
+        enemy.type = type;
+        enemy.hp = stats.hp;
+        enemy.maxHp = stats.hp;
+        enemy.position.set(start.x, start.y, start.z);
+        enemy.node = null;
+        enemy.isDead = false;
+        enemy.currentPathIndex = 0;
+        enemy.pathPoints = pathPoints;
         
-        const enemy: EnemyInstance = {
-            id,
-            type,
-            hp: stats.hp,
-            maxHp: stats.hp,
-            position: startPos,
-            node: null,
-            isDead: false,
-            currentPathIndex: 0,
-            pathPoints
-        };
-        
-        // 创建敌人节点
         this.createEnemyNode(enemy);
         
         this._enemies.set(id, enemy);
@@ -194,11 +306,18 @@ export class Combat extends Component {
     }
     
     /**
-     * 创建敌人节点
+     * 创建/复用敌人节点
      */
     private createEnemyNode(enemy: EnemyInstance) {
         const container = this.enemyContainer || this.node;
-        const enemyNode = PlaceholderGraphics.createEnemy(container, enemy.type);
+        const enemyNode = this._enemyNodePool
+            ? this._enemyNodePool.acquire()
+            : PlaceholderGraphics.createEnemy(container, enemy.type);
+        
+        if (enemyNode.parent !== container) {
+            enemyNode.parent = container;
+        }
+        PlaceholderGraphics.restyleEnemy(enemyNode, enemy.type);
         enemyNode.setPosition(enemy.position);
         enemy.node = enemyNode;
     }
@@ -259,7 +378,7 @@ export class Combat extends Component {
         let pathDir: Vec3 | null = null;
         const currentTarget = enemy.pathPoints[enemy.currentPathIndex];
         if (currentTarget) {
-            pathDir = new Vec3();
+            pathDir = this._tmpVecA;
             Vec3.subtract(pathDir, currentTarget.position, enemy.position);
             if (pathDir.length() > 0.001) {
                 pathDir.normalize();
@@ -298,12 +417,25 @@ export class Combat extends Component {
         console.log(`[Combat] 击杀敌人: ${enemy.type}`);
         CombatEvents.emit(EVENT_ENEMY_KILLED, enemy);
         
-        // 从列表移除
+        // 从列表移除并归还节点/数据到对象池
         this._enemies.delete(enemy.id);
         
-        if (enemy.node) {
-            enemy.node.destroy();
+        for (const proj of this._projectiles) {
+            if (proj.target === enemy) {
+                proj.target = null;
+            }
         }
+        
+        if (enemy.node) {
+            if (this._enemyNodePool) {
+                this._enemyNodePool.release(enemy.node);
+            } else if (enemy.node.isValid) {
+                enemy.node.destroy();
+            }
+            enemy.node = null;
+        }
+        
+        this._enemyDataPool?.release(enemy);
         
         // 通知 BattleFlow
         if (this._onEnemyKilledCallback) {
@@ -392,7 +524,34 @@ export class Combat extends Component {
      * 获取所有存活敌人
      */
     getAllEnemies(): EnemyInstance[] {
-        return Array.from(this._enemies.values());
+        const buf = this._enemyListBuffer;
+        buf.length = 0;
+        for (const enemy of this._enemies.values()) {
+            if (!enemy.isDead) {
+                buf.push(enemy);
+            }
+        }
+        return buf;
+    }
+    
+    /**
+     * Day13: 把敌人坐标填入复用数组（DangerSide 每帧调用）
+     */
+    fillEnemyPositions(out: { x: number; y: number }[]): { x: number; y: number }[] {
+        let i = 0;
+        for (const enemy of this._enemies.values()) {
+            if (enemy.isDead) continue;
+            let p = out[i];
+            if (!p) {
+                p = { x: 0, y: 0 };
+                out[i] = p;
+            }
+            p.x = enemy.position.x;
+            p.y = enemy.position.y;
+            i++;
+        }
+        out.length = i;
+        return out;
     }
     
     /**
@@ -418,7 +577,8 @@ export class Combat extends Component {
      * 查找范围内的敌人
      */
     findEnemiesInRange(position: Vec3, range: number): EnemyInstance[] {
-        const result: EnemyInstance[] = [];
+        const result = this._rangeBuffer;
+        result.length = 0;
         
         for (const enemy of this._enemies.values()) {
             if (enemy.isDead) continue;
@@ -434,14 +594,19 @@ export class Combat extends Component {
      * 查找扇形范围内的敌人
      */
     findEnemiesInCone(position: Vec3, direction: Vec3, range: number, angleInDegrees: number): EnemyInstance[] {
-        const result: EnemyInstance[] = [];
+        const result = this._coneBuffer;
+        result.length = 0;
         const halfAngle = angleInDegrees / 2 * Math.PI / 180;
-        const dirNorm = direction.clone().normalize();
+        
+        const dirNorm = this._tmpVecB;
+        dirNorm.set(direction);
+        dirNorm.normalize();
+        
+        const toEnemy = this._tmpVecA;
         
         for (const enemy of this._enemies.values()) {
             if (enemy.isDead) continue;
             
-            const toEnemy = new Vec3();
             Vec3.subtract(toEnemy, enemy.position, position);
             const dist = toEnemy.length();
             
@@ -463,22 +628,40 @@ export class Combat extends Component {
      * 清空所有战斗实体
      */
     clearAll() {
+        // Day13: 归还池化节点，不 destroy
         for (const enemy of this._enemies.values()) {
             if (enemy.node) {
-                enemy.node.destroy();
+                if (this._enemyNodePool) {
+                    this._enemyNodePool.release(enemy.node);
+                } else if (enemy.node.isValid) {
+                    enemy.node.destroy();
+                }
+                enemy.node = null;
             }
+            this._enemyDataPool?.release(enemy);
         }
         this._enemies.clear();
         
         for (const proj of this._projectiles) {
-            if (proj.node) {
+            if (this._projectilePool) {
+                this._projectilePool.release(proj);
+            } else if (proj.node && proj.node.isValid) {
                 proj.node.destroy();
             }
         }
-        this._projectiles = [];
-        this._buildingStates.clear();
+        this._projectiles.length = 0;
         
-        console.log('[Combat] 已清空所有战斗实体');
+        this._vfxPool?.releaseAll();
+        releaseSharedExplosionPool();
+        
+        this._buildingStates.clear();
+        this._rangeBuffer.length = 0;
+        this._coneBuffer.length = 0;
+        this._enemyListBuffer.length = 0;
+        this._minesToRemove.length = 0;
+        
+        const stats = this.getPoolStats();
+        console.log('[Combat] 已清空所有战斗实体（池归还）', stats);
     }
     
     update(dt: number) {
@@ -510,8 +693,8 @@ export class Combat extends Component {
             const currentTarget = enemy.pathPoints[enemy.currentPathIndex];
             if (!currentTarget) continue;
             
-            // 计算移动方向和距离
-            const toTarget = new Vec3();
+            // 计算移动方向和距离（复用 _tmpVecA）
+            const toTarget = this._tmpVecA;
             Vec3.subtract(toTarget, currentTarget.position, enemy.position);
             const distToTarget = toTarget.length();
             
@@ -608,7 +791,7 @@ export class Combat extends Component {
                     
                     // Day8: 炮轰爆炸圈 VFX
                     const vfxContainer = this.enemyContainer || this.node;
-                    createExplosionRing(vfxContainer, target.position, building.level);
+                    createExplosionRing(vfxContainer, target.position, building.level, undefined, this._vfxPool ?? undefined);
                     
                     // Day8: 炮轰音效
                     AudioService.play(SfxId.CannonBoom);
@@ -679,7 +862,8 @@ export class Combat extends Component {
         if (!this.gridBuild) return;
         
         const buildings = this.gridBuild.getAllBuildings();
-        const minesToRemove: GridPosition[] = [];
+        const minesToRemove = this._minesToRemove;
+        minesToRemove.length = 0;
         
         for (const building of buildings) {
             if (building.type !== BuildingType.Mine) continue;
@@ -710,7 +894,7 @@ export class Combat extends Component {
                 
                 // Day8: 地雷爆炸 VFX 和音效
                 const vfxContainer = this.enemyContainer || this.node;
-                createMineExplosion(vfxContainer, minePos, building.level);
+                createMineExplosion(vfxContainer, minePos, building.level, this._vfxPool ?? undefined);
                 AudioService.play(SfxId.MineBoom);
                 
                 // 标记待移除
@@ -728,10 +912,34 @@ export class Combat extends Component {
     }
     
     /**
-     * 更新子弹（预留，目前使用即时伤害）
+     * 更新子弹（即时伤害为主；若有池化弹体则推进 lifetime 后归还）
      */
     private updateProjectiles(dt: number) {
-        // 当前实现使用即时伤害，无需子弹飞行
+        if (this._projectiles.length === 0) return;
+        
+        for (let i = this._projectiles.length - 1; i >= 0; i--) {
+            const proj = this._projectiles[i];
+            proj.lifetime -= dt;
+            if (proj.node) {
+                proj.position.add(this._tmpVecA.set(proj.velocity).multiplyScalar(dt));
+                proj.node.setPosition(proj.position);
+            }
+            if (proj.lifetime <= 0) {
+                this._projectiles.splice(i, 1);
+                this._projectilePool?.release(proj);
+            }
+        }
+    }
+    
+    /**
+     * Day13: 从池取出弹体数据（当前开火仍为即时命中，供预留弹道使用）
+     */
+    acquireProjectile(): Projectile {
+        this.ensurePools();
+        const p = this._projectilePool!.acquire();
+        p.id = `proj_${++this._projectileIdCounter}`;
+        this._projectiles.push(p);
+        return p;
     }
     
     /**

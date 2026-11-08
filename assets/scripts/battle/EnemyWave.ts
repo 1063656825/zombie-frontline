@@ -32,11 +32,15 @@ export class EnemyWave extends Component {
     
     // 生成队列
     private _spawnQueue: SpawnQueueItem[] = [];
+    private _spawnItemPool: SpawnQueueItem[] = [];
     private _waveTimer: number = 0;
     private _isWaveActive: boolean = false;
     
     // 路径交替计数
     private _pathCounter: number = 0;
+    
+    // Day13: 复用生成坐标，避免每只敌人 new Vec3
+    private readonly _spawnPos = new Vec3();
     
     /**
      * 开始波次
@@ -50,8 +54,9 @@ export class EnemyWave extends Component {
             return;
         }
         
-        // 构建生成队列
-        this._spawnQueue = this.buildSpawnQueue(this._waveConfig);
+        // 构建生成队列（复用 SpawnQueueItem）
+        this.recycleSpawnQueue();
+        this.buildSpawnQueue(this._waveConfig);
         this._waveTimer = 0;
         this._isWaveActive = true;
         this._pathCounter = 0;
@@ -62,9 +67,7 @@ export class EnemyWave extends Component {
     /**
      * 构建生成队列
      */
-    private buildSpawnQueue(config: WaveConfig): SpawnQueueItem[] {
-        const queue: SpawnQueueItem[] = [];
-        
+    private buildSpawnQueue(config: WaveConfig): void {
         for (const spawn of config.enemies) {
             const delay = spawn.delay ?? 0;
             const interval = spawn.interval ?? 1;
@@ -75,21 +78,40 @@ export class EnemyWave extends Component {
                 // 交替使用左右路径
                 const useLeftPath = (this._pathCounter + i) % 2 === 0;
                 
-                queue.push({
-                    type: spawn.type,
-                    spawnTime,
-                    useLeftPath,
-                    spawned: false
-                });
+                const item = this.acquireSpawnItem();
+                item.type = spawn.type;
+                item.spawnTime = spawnTime;
+                item.useLeftPath = useLeftPath;
+                item.spawned = false;
+                this._spawnQueue.push(item);
             }
             
             this._pathCounter += spawn.count;
         }
         
         // 按时间排序
-        queue.sort((a, b) => a.spawnTime - b.spawnTime);
-        
-        return queue;
+        this._spawnQueue.sort((a, b) => a.spawnTime - b.spawnTime);
+    }
+    
+    private acquireSpawnItem(): SpawnQueueItem {
+        const item = this._spawnItemPool.pop();
+        if (item) return item;
+        return {
+            type: EnemyType.Z1_Walker,
+            spawnTime: 0,
+            useLeftPath: true,
+            spawned: false
+        };
+    }
+    
+    /**
+     * Day13: 将队列项归还内部池，保留容量
+     */
+    private recycleSpawnQueue() {
+        for (const item of this._spawnQueue) {
+            this._spawnItemPool.push(item);
+        }
+        this._spawnQueue.length = 0;
     }
     
     /**
@@ -97,7 +119,7 @@ export class EnemyWave extends Component {
      */
     stopWave() {
         this._isWaveActive = false;
-        this._spawnQueue = [];
+        this.recycleSpawnQueue();
         console.log('[EnemyWave] 波次停止');
     }
     
@@ -130,14 +152,9 @@ export class EnemyWave extends Component {
         // 处理生成队列
         for (const item of this._spawnQueue) {
             if (!item.spawned && this._waveTimer >= item.spawnTime) {
-                // 生成敌人
-                const spawnPos = new Vec3(
-                    item.useLeftPath ? -120 : 120,
-                    450,
-                    0
-                );
-                
-                this.combat.spawnEnemy(item.type, spawnPos, item.useLeftPath);
+                // 生成敌人（复用坐标）
+                this._spawnPos.set(item.useLeftPath ? -120 : 120, 450, 0);
+                this.combat.spawnEnemy(item.type, this._spawnPos, item.useLeftPath);
                 item.spawned = true;
                 
                 console.log(`[EnemyWave] 生成敌人: ${item.type} (${item.useLeftPath ? '左' : '右'}路), 进度: ${this.getSpawnedCount()}/${this.getTotalCount()}`);
